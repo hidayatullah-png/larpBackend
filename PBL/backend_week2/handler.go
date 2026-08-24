@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/gofiber/fiber/v2"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 var students []Student
@@ -128,6 +129,7 @@ func createStudent(c *fiber.Ctx) error {
 
 	return created(c, "mahasiswa berhasil dibuat", baru, "/api/v1/students"+strconv.Itoa(baru.ID))
 }
+
 func replaceStudent(c *fiber.Ctx) error {
 	id, valid := paramID(c)
 	if !valid {
@@ -207,13 +209,16 @@ func patchStudent(c *fiber.Ctx) error {
 		}
 		students[i].Name = namaStr
 	}
+	if req.Grade != nil {
+		students[i].Grade = *req.Grade
+	}
 	if req.IsActive != nil {
 		students[i].IsActive = *req.IsActive
 	}
 	return ok(c, "mahasiswa berhasil diperbarui sebagian", students[i])
 }
 
-func deleteStudent(c *fiber.Ctx) error{
+func deleteStudent(c *fiber.Ctx) error {
 	id, valid := paramID(c)
 	if !valid {
 		return fail(c, fiber.StatusBadRequest, "id harus berupa angka bulat positif")
