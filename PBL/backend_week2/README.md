@@ -1,0 +1,12 @@
+# Dokumentasi Kontrak API (Students)
+
+Tabel berikut berisi rincian kontrak API untuk entitas Mahasiswa sesuai dengan persyaratan pada Modul Pertemuan.
+
+| Metode | Endpoint | Parameter | Contoh Body Permintaan | Status HTTP yang Mungkin | Contoh Respons (Sukses) |
+|---|---|---|---|---|---|
+| **GET** | `/api/v1/students` | **Query String:**<br>`page` (int)<br>`limit` (int)<br>`search` (string)<br>`sort` (string)<br>`order` (asc/desc)<br>`is_active` (bool) | *(Kosong)* | `200 OK` | `{"success": true, "message": "daftar mahasiswa berhasil diambil", "data": [{"id": 1, "nim": "434241067", "name": "Leon", "grade": 85.5, "is_active": true}], "meta": {"page": 1, "limit": 10, "total": 1, "total_pages": 1}}` |
+| **GET** | `/api/v1/students/:id` | **Path Variable:**<br>`id` (int) | *(Kosong)* | `200 OK`<br>`400 Bad Request`<br>`404 Not Found` | `{"success": true, "message": "Data mahasiswa ditemukan", "data": {"id": 1, "nim": "434241067", "name": "Leon", "grade": 85.5, "is_active": true}}` |
+| **POST** | `/api/v1/students` | *(Kosong)* | `{"nim": "434241067", "name": "Leon", "grade": 85.5}` | `201 Created`<br>`400 Bad Request`<br>`409 Conflict`<br>`415 Unsupported Media`<br>`422 Unprocessable` | `{"success": true, "message": "mahasiswa berhasil dibuat", "data": {"id": 1, "nim": "434241067", "name": "Leon", "grade": 85.5, "is_active": true}}` |
+| **PUT** | `/api/v1/students/:id` | **Path Variable:**<br>`id` (int) | `{"nim": "434241067", "name": "Leon Kennedy", "grade": 90.0, "is_active": true}`<br>*(Wajib mengirim semua field)* | `200 OK`<br>`400 Bad Request`<br>`404 Not Found`<br>`409 Conflict`<br>`415 Unsupported Media`<br>`422 Unprocessable` | `{"success": true, "message": "mahasiswa berhasil diganti total", "data": {"id": 1, "nim": "434241067", "name": "Leon Kennedy", "grade": 90.0, "is_active": true}}` |
+| **PATCH** | `/api/v1/students/:id` | **Path Variable:**<br>`id` (int) | `{"grade": 95.0}`<br>*(Kirim field yang ingin diubah saja)* | `200 OK`<br>`400 Bad Request`<br>`404 Not Found`<br>`409 Conflict`<br>`415 Unsupported Media`<br>`422 Unprocessable` | `{"success": true, "message": "mahasiswa berhasil diperbarui sebagian", "data": {"id": 1, "nim": "434241067", "name": "Leon Kennedy", "grade": 95.0, "is_active": true}}` |
+| **DELETE** | `/api/v1/students/:id` | **Path Variable:**<br>`id` (int) | *(Kosong)* | `204 No Content`<br>`400 Bad Request`<br>`404 Not Found` | *(Kosong / Tidak ada body respons)* |
