@@ -11,8 +11,8 @@ import (
 	"latihan-fiber/app/model"
 )
 
-// requestContext memberi timeout untuk setiap operasi database, agar tidak menggantung selamanya jika server database tidak merespons.
-func requestContext(c *fiber.Ctx) (context.Context, context.CancelFunc) {
+// RequestContext memberi timeout untuk setiap operasi database, agar tidak menggantung selamanya jika server database tidak merespons.
+func RequestContext(c *fiber.Ctx) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(c.UserContext(), 5*time.Second)
 }
 
@@ -30,7 +30,7 @@ var allowedSort = map[string]bool{
 	"id": true, "nim": true, "name": true, "grade": true,
 }
 
-func parseListQuery(c *fiber.Ctx) model.ListQuery {
+func ParseListQuery(c *fiber.Ctx) model.ListQuery {
 	q := model.ListQuery{
 		Page:   c.QueryInt("page", 1),
 		Limit:  c.QueryInt("limit", 10),

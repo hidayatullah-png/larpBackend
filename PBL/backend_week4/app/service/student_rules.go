@@ -9,7 +9,7 @@ import (
 //File berisi business rule murnis(tidak menyentuh fiber.Ctx)
 // tidak menyentuh database, dan tidak menyentuh HTTP request/response
 
-func ValidateCreate(reqq *model.Student) map[string]string {
+func ValidateCreate(reqq *model.CreateStudentRequest) map[string]string {
 	errs := map[string]string{}
 	if strings.TrimSpace(reqq.NIM) == "" {
 		errs["nim"] = "wajib diisi"
@@ -77,13 +77,9 @@ func IsEmptyPatch(req *model.PatchStudentRequest) bool{
 }
 
 //CountTotalPages menghitung jumlah halaman total berdasarkan total data dan limit per halaman
-func CountTotalPages(totalData, limit int) int {
+func CountTotalPages(total, limit int) int {
 	if limit <= 0 {
 		return 0
 	}
-	totalPages := totalData / limit
-	if totalData%limit > 0 {
-		totalPages++
-	}
-	return totalPages
+	return (total + limit - 1) / limit
 }
