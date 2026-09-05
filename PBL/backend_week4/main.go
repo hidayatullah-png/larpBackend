@@ -1,66 +1,66 @@
-package main
+package main 
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
-	
-	"latihan-fiber/app/repository"
+	"latihan-fiber/app/repository" 
+	"latihan-fiber/app/service"
 	"latihan-fiber/config"
 	"latihan-fiber/database"
 )
 
 func main() {
-	// 1. Konfigurasi Environment
+	// 1. Konfigurasi dan inisialisasi logger
 	config.LoadEnv()
+	logger := config.NewLogger()
 
-	// 2. Koneksi basis data (Connection Pool)
+	// 2. Database
 	pool, err := database.NewPool(context.Background())
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		logger.Error("gagal terhubung ke database", slog.String("error", err.Error()))
+		os.Exit(1)
 	}
-	defer pool.Close() // Pastikan pool ditutup saat aplikasi mati
+	defer pool.Close()
 
-	// 3. Perakitan: pool -> repository -> handler
+	// 3. Perakitan dari dalam ke luar: repository -> service
+	// Perbaikan: Ganti NewUserRepository menjadi NewStudentRepository
 	studentRepository := repository.NewStudentRepository(pool)
-	studentHandler := NewStudentHandler(studentRepository)
+	// Perbaikan: Ganti NewUserService menjadi NewStudentService
+	studentService := service.NewStudentService(studentRepository)
 
-	// 4. Inisialisasi Aplikasi Fiber
-	app := fiber.New()
-	app.Use(requestid.New())
-	app.Use(logger.New())
-	app.Use(cors.New())
+	// 4. Aplikasi
+	app := config.NewApp(logger, pool, *studentService)
 
-	api := app.Group("/api/v1")
-
-	// 5. Endpoint Health Check yang ikut memeriksa basis data
-	api.Get("/health", func(c *fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
-		defer cancel()
-
-		if err := pool.Ping(ctx); err != nil {
-			return fail(c, fiber.StatusServiceUnavailable, "database tidak dapat dihubungi")
-		}
-		return ok(c, "server dan database berjalan", nil)
-	})
-
-	// 6. Rute Mahasiswa (Students)
-	// Jika kamu memakai middleware requireJSON dari minggu lalu, kamu bisa menambahkannya di sini.
-	// Contoh: s := api.Group("/students", requireJSON)
-	s := api.Group("/students")
-	s.Get("/", studentHandler.List)
-	s.Get("/:id", studentHandler.Get)
-	s.Post("/", studentHandler.Create)
-	s.Put("/:id", studentHandler.Replace)
-	s.Patch("/:id", studentHandler.Patch)
-	s.Delete("/:id", studentHandler.Delete)
-
-	// 7. Jalankan Server
 	port := config.GetEnv("APP_PORT", "3000")
-	log.Fatal(app.Listen(":" + port))
+
+	// Jalankan server di dalam goroutine agar tidak memblokir proses di bawahnya
+	go func() {
+		if err := app.Listen(":" + port); err != nil {
+			logger.Error("gagal menjalankan server", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	}()
+
+	logger.Info("server berjalan", slog.String("port", port))
+
+	// 5. Graceful shutdown: tunggu Ctrl+C, lalu beri waktu request selesai
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("memulai proses mematikan server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := app.ShutdownWithContext(ctx); err != nil {
+		logger.Error("gagal mematikan server", slog.String("error", err.Error()))
+	}
+
+	logger.Info("server berhasil dimatikan dengan aman")
 }
