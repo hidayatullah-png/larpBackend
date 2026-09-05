@@ -45,8 +45,9 @@ func ValidateReplace(req *model.ReplaceStudentRequest) map[string]string {
 }
 
 //ApplyPatch memeriksa isi permintaan PATCH, dan mengembalikan daftar error jika ada
-func ApplyPatch(s *model.Student, req *model.PatchStudentRequest) map[string]string{
+func ApplyPatch(s *model.Student, req *model.PatchStudentRequest) map[string]string {
 	errs := map[string]string{}
+	
 	if req.NIM != nil {
 		if strings.TrimSpace(*req.NIM) == "" {
 			errs["nim"] = "wajib diisi pada PATCH"
@@ -68,12 +69,23 @@ func ApplyPatch(s *model.Student, req *model.PatchStudentRequest) map[string]str
 			s.Grade = *req.Grade
 		}
 	}
+
+	// TAMBAHKAN BLOK INI UNTUK UPDATE IS_ACTIVE
+	if req.IsActive != nil {
+		s.IsActive = *req.IsActive
+	}
+
+	// Konsistenkan dengan fungsi Validate lainnya (return nil jika tidak ada error)
+	if len(errs) == 0 {
+		return nil
+	}
 	return errs
 }
 
-//IsEmptyPatch memeriksa apakah permintaan PATCH kosong (tidak ada field yang diubah)
-func IsEmptyPatch(req *model.PatchStudentRequest) bool{
-	return req.NIM == nil && req.Name == nil && req.Grade == nil
+// IsEmptyPatch memeriksa apakah permintaan PATCH kosong (tidak ada field yang diubah)
+func IsEmptyPatch(req *model.PatchStudentRequest) bool {
+	// TAMBAHKAN PENGECEKAN && req.IsActive == nil
+	return req.NIM == nil && req.Name == nil && req.Grade == nil && req.IsActive == nil
 }
 
 //CountTotalPages menghitung jumlah halaman total berdasarkan total data dan limit per halaman
