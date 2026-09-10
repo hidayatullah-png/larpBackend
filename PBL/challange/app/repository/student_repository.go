@@ -22,20 +22,22 @@ var (
 type StudentRepository interface {
 	FindAll(ctx context.Context, q model.ListQuery) ([]model.Student, int, error)
 	FindByID(ctx context.Context, id int) (model.Student, error)
+	FindByNIM(ctx context.Context, nim string) (model.Student, error)
 	Create(ctx context.Context, s model.Student) (model.Student, error)
 	Update(ctx context.Context, s model.Student) (model.Student, error)
 	Delete(ctx context.Context, id int) error
 }
 
-// kolomUrut adalah daftar putih: pemetaan dari nilai yang boleh dikirim klien 
-// ke nama kolom yang sebenarnya[cite: 1]. ORDER BY tidak dapat memakai parameter, 
+// kolomUrut adalah daftar putih: pemetaan dari nilai yang boleh dikirim klien
+// ke nama kolom yang sebenarnya[cite: 1]. ORDER BY tidak dapat memakai parameter,
 // sehingga daftar putih inilah yang mencegah SQL injection[cite: 1].
 var kolomUrut = map[string]string{
-	"id":         "id",
-	"nim":        "nim",
-	"name":       "name",
-	"grade":      "grade",
-	"created_at": "created_at",
+	"id":          "id",
+	"nim":         "nim",
+	"name":        "name",
+	"grade":       "grade",
+	"mata_kuliah": "mata_kuliah",
+	"created_at":  "created_at",
 }
 
 type studentPostgresRepository struct {
@@ -83,8 +85,9 @@ func (r *studentPostgresRepository) FindAll(ctx context.Context, q model.ListQue
 	}
 
 	sqlText := fmt.Sprintf(
-		`SELECT id, nim, name, grade, is_active, created_at 
-		FROM students %s 
+		`SELECT s.id, s.nim, s.name, COALESCE (n.grade, 0),COALESCE (n.mata_kuliah, ''), s.is_active, s.created_at 
+		FROM students s
+		LEFT JOIN nilai n ON s.id = n.id_student %s 
 		ORDER BY %s %s 
 		LIMIT $%d OFFSET $%d`,
 		where, kolomUrut[q.Sort], arah, len(args)+1, len(args)+2,
@@ -101,7 +104,7 @@ func (r *studentPostgresRepository) FindAll(ctx context.Context, q model.ListQue
 	hasil := []model.Student{}
 	for rows.Next() {
 		var s model.Student
-		if err := rows.Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.MataKuliah, &s.IsActive, &s.CreatedAt); err != nil {
 			return nil, 0, fmt.Errorf("membaca baris student: %w", err)
 		}
 		hasil = append(hasil, s)
@@ -117,9 +120,11 @@ func (r *studentPostgresRepository) FindAll(ctx context.Context, q model.ListQue
 func (r *studentPostgresRepository) FindByID(ctx context.Context, id int) (model.Student, error) {
 	var s model.Student
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, nim, name, grade, is_active, created_at 
-		FROM students WHERE id = $1`, id,
-	).Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive, &s.CreatedAt)
+		`SELECT s.id, s.nim, s.name, COALESCE (n.grade, 0),COALESCE (n.mata_kuliah, ''), s.is_active, s.created_at 
+		FROM students s
+		LEFT JOIN nilai n ON s.id = n.id_student 
+		WHERE s.id = $1`, id,
+	).Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.MataKuliah, &s.IsActive, &s.CreatedAt)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -130,13 +135,37 @@ func (r *studentPostgresRepository) FindByID(ctx context.Context, id int) (model
 	return s, nil
 }
 
-func (r *studentPostgresRepository) Create(ctx context.Context, s model.Student) (model.Student, error) {
-	// RETURNING membuat id dan created_at hasil buatan basis data langsung ikut kembali[cite: 1].
+func (r *studentPostgresRepository) FindByNIM(ctx context.Context, nim string) (model.Student, error) {
+	var s model.Student
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO students (nim, name, grade, is_active) 
-		VALUES ($1, $2, $3, $4) 
+		`SELECT s.id, s.nim, s.name, COALESCE (n.grade, 0),COALESCE (n.mata_kuliah, ''), s.is_active, s.created_at 
+		FROM students s
+		LEFT JOIN nilai n ON s.id = n.id_student  
+		WHERE s.nim =$1`, nim,
+	).Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.MataKuliah, &s.IsActive, &s.CreatedAt)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.Student{}, ErrNotFound
+		}
+		return model.Student{}, fmt.Errorf("mengambil student berdasarkan nim: %w", err)
+	}
+	return s, nil
+}
+
+func (r *studentPostgresRepository) Create(ctx context.Context, s model.Student) (model.Student, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return model.Student{}, fmt.Errorf("Memulai transaksi: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// RETURNING membuat id dan created_at hasil buatan basis data langsung ikut kembali[cite: 1].
+	err = tx.QueryRow(ctx,
+		`INSERT INTO students (nim, name, is_active) 
+		VALUES ($1, $2, $3) 
 		RETURNING id, created_at`,
-		s.NIM, s.Name, s.Grade, s.IsActive,
+		s.NIM, s.Name, s.IsActive,
 	).Scan(&s.ID, &s.CreatedAt)
 
 	if err != nil {
@@ -145,25 +174,62 @@ func (r *studentPostgresRepository) Create(ctx context.Context, s model.Student)
 		}
 		return model.Student{}, fmt.Errorf("menyimpan student: %w", err)
 	}
+
+	_, err = tx.Exec(ctx,
+		`INSERT INTO nilai (id_student, grade, mata_kuliah)
+		VALUES ($1, $2, $3)`,
+		s.ID, s.Grade, s.MataKuliah,
+	)
+
+	if err != nil {
+		return model.Student{}, fmt.Errorf("Menyimpan nilai student: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return model.Student{}, fmt.Errorf("Commit transaksi create: %w", err)
+	}
 	return s, nil
 }
 
 func (r *studentPostgresRepository) Update(ctx context.Context, s model.Student) (model.Student, error) {
-	err := r.pool.QueryRow(ctx,
-		`UPDATE students SET nim = $1, name = $2, grade = $3, is_active = $4 
-		WHERE id = $5 
-		RETURNING id, nim, name, grade, is_active, created_at`,
-		s.NIM, s.Name, s.Grade, s.IsActive, s.ID,
-	).Scan(&s.ID, &s.NIM, &s.Name, &s.Grade, &s.IsActive, &s.CreatedAt)
 
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
+		return model.Student{}, fmt.Errorf("Memulai transaksi: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var exists bool
+	err = tx.QueryRow(ctx,
+		`UPDATE students SET nim = $1, name = $2, is_active = $3 
+		WHERE id = $4
+		RETURNING true`,
+		s.NIM, s.Name, s.IsActive, s.ID,
+	).Scan(&exists)
+
+	if err != nil || !exists {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.Student{}, ErrNotFound
 		}
 		if isUniqueViolation(err) {
 			return model.Student{}, ErrDuplicate
 		}
-		return model.Student{}, fmt.Errorf("memperbarui student: %w", err)
+		return model.Student{}, fmt.Errorf("Memperbarui student: %w", err)
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE nilai SET mata_kuliah = $1, grade = $2
+		WHERE id_student =$3`,
+		s.MataKuliah, s.Grade, s.ID,
+	)
+	if err != nil {
+		return model.Student{}, fmt.Errorf("Memperbarui nilai student: %w", err)
+	}
+	err = tx.QueryRow(ctx, `SELECT created_at FROM students WHERE id = $1`, s.ID).Scan(&s.CreatedAt)
+	if err != nil {
+		return model.Student{}, fmt.Errorf("mengambil waktu pembuatan: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return model.Student{}, fmt.Errorf("commit transaksi update: %w", err)
 	}
 	return s, nil
 }
@@ -180,8 +246,6 @@ func (r *studentPostgresRepository) Delete(ctx context.Context, id int) error {
 	}
 	return nil
 }
-
-
 
 // isUniqueViolation memeriksa apakah error berasal dari pelanggaran batasan UNIQUE.
 // Kode 23505 adalah kode resmi PostgreSQL untuk itu[cite: 1].

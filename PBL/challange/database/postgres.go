@@ -9,7 +9,8 @@ import (
 	"latihan-fiber/config"
 )
 
-// NewPool membuat connection pool ke PostgreSQL
+// NewPool membuat connection pool ke PostgreSQL.
+//
 // Pool, bukan koneksi tunggal: server melayani banyak permintaan sekaligus,
 // sedangkan membuka koneksi baru untuk setiap permintaan sangat mahal.
 // Pool menyediakan sejumlah koneksi siap pakai yang dipinjam lalu dikembalikan.
