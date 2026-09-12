@@ -12,14 +12,52 @@ import (
 	"latihan-fiber/middleware"
 )
 
-// Perbaikan 1: Ubah parameter agar menerima db dan studentService (sesuai dengan config.NewApp)
-func RegisterRoute(app *fiber.App, db *pgxpool.Pool, studentService service.StudentService) {
-	
-	// grup route utama
+// Dependencies membungkus semua kebutuhan injeksi untuk router,
+// menghindari parameter fungsi yang terlalu panjang.
+type Dependencies struct {
+	Pool        *pgxpool.Pool
+	JWT         *helper.JWTManager
+	UserService *service.UserService 
+	AuthService *service.AuthService
+}
+
+// Register memasang seluruh rute API.
+func Register(app *fiber.App, deps Dependencies) {
 	api := app.Group("/api/v1")
 
-	// endpoint untuk health check
-	api.Get("/health", func(c *fiber.Ctx) error {
+	// --- Publik ---
+	api.Get("/health", healthCheck(deps.Pool))
+
+	// --- Autentikasi ---
+	// RequireJSON dipasang di level grup auth.
+	// Aman karena RequireJSON yang kamu buat sebelumnya otomatis mengabaikan method GET.
+	auth := api.Group("/auth", middleware.RequireJSON)
+
+	auth.Post("/register", deps.AuthService.Register)
+	auth.Post("/login", middleware.LoginRateLimiter(), deps.AuthService.Login)
+	auth.Post("/refresh", deps.AuthService.Refresh)
+	auth.Post("/logout", deps.AuthService.Logout)
+
+	// Dilindungi oleh satpam RequireAuth
+	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.AuthService.Me)
+
+	// --- Wajib membawa access token ---
+	users := api.Group("/users",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT),
+	)
+
+	users.Get("/", deps.UserService.List)
+	users.Get("/:id", deps.UserService.Get)
+	users.Post("/", deps.UserService.Create)
+	users.Put("/:id", deps.UserService.Replace)
+	users.Patch("/:id", deps.UserService.Patch)
+	users.Delete("/:id", deps.UserService.Delete)
+}
+
+// healthCheck dipisah menjadi fungsi closure agar fungsi Register lebih bersih.
+func healthCheck(db *pgxpool.Pool) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
@@ -31,19 +69,5 @@ func RegisterRoute(app *fiber.App, db *pgxpool.Pool, studentService service.Stud
 			"status":   "UP",
 			"database": "CONNECTED",
 		})
-	})
-
-	// rute yang TIDAK butuh RequireJSON (GET, DELETE)
-	api.Get("/students", studentService.List)
-	api.Get("/students/:id", studentService.Get)
-	api.Delete("/students/:id", studentService.Delete)
-
-	// sub-grup khusus rute yang MEMBUTUHKAN body JSON (POST, PUT, PATCH)
-	mutationGroup := api.Group("")
-	mutationGroup.Use(middleware.RequireJSON)
-
-	// Perbaikan 2: Tambahkan "/students" agar endpoint-nya tidak salah alamat
-	mutationGroup.Post("/students", studentService.Create)
-	mutationGroup.Put("/students/:id", studentService.Replace)
-	mutationGroup.Patch("/students/:id", studentService.Patch)
+	}
 }

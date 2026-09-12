@@ -2,40 +2,43 @@ package config
 
 import (
 	"log/slog"
+	"os"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgxpool"
 
-	"latihan-fiber/app/service"
 	"latihan-fiber/helper"
 	"latihan-fiber/middleware"
 	"latihan-fiber/route"
 )
 
-// NewApp merakit aplikasi: membuat instance Fiber, menambahkan middleware, dan mendaftarkan route.
-// Fungsi ini menerima logger, pool database, dan service sebagai parameter agar bisa diteruskan ke middleware dan route.
-func NewApp(logger *slog.Logger, pool *pgxpool.Pool, studentService service.StudentService) *fiber.App {
+// NewApp merakit aplikasi: membuat instance Fiber, memasang middleware,
+// lalu mendaftarkan route menggunakan Dependencies yang dikirim dari main.go.
+func NewApp(logger *slog.Logger, deps route.Dependencies) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:      GetEnv("APP_NAME", "latihan-fiber"),
+		AppName:      GetEnv("APP_NAME", "Praktikum Backend Lanjut"),
 		ErrorHandler: newErrorHandler(logger),
+		// Membatasi ukuran body mencegah satu request besar menghabiskan
+		// memori server (denial of service yang paling murah dilakukan).
+		BodyLimit: 1 * 1024 * 1024, // 1 MB
+
 	})
 
-	// Perbaikan: gunakan huruf besar R
-	middleware.Register(app, logger)
+	// 1. Pasang Middleware Umum
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	middleware.Register(app, logger, allowedOrigins)
 
-	// Perbaikan: gunakan studentService sesuai dengan parameter
-	route.RegisterRoute(app, pool, studentService) // (Sesuaikan nama fungsi Register/RegisterRoute sesuai yang ada di file route.go milikmu)
+	// 2. Daftarkan seluruh rute API
+	route.Register(app, deps)
 
-	// Penampung terakhir untuk URL yang tidak dikenal
+	// 3. Penampung terakhir untuk URL yang tidak dikenal
 	app.Use(func(c *fiber.Ctx) error {
-		// Perbaikan: StatusNotFound
 		return helper.Fail(c, fiber.StatusNotFound, "endpoint tidak ditemukan")
 	})
 
 	return app
 }
 
-// newErrorHandler adalah jaring pengaman terakhir: error yang tidak tertangani di service berakhir di sini dengan format yang tetap konsisten.
+// newErrorHandler adalah jaring pengaman terakhir untuk error yang tidak tertangani.
 func newErrorHandler(logger *slog.Logger) fiber.ErrorHandler {
 	return func(c *fiber.Ctx, err error) error {
 		status := fiber.StatusInternalServerError
