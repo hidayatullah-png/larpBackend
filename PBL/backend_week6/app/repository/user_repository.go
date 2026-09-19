@@ -35,7 +35,19 @@ var kolomUrut = map[string]string{
 	"id":         "id",
 	"username":   "username",
 	"email":      "email",
+	"role":       "role",
 	"created_at": "created_at",
+}
+
+// kolomUser adalah SATU-SATUNYA daftar kolom yang dibaca dari tabel users.
+// Urutannya HARUS sama dengan urutan Scan di scanUser. Dengan satu sumber,
+// kolom tidak akan lagi terlewat di salah satu query (penyebab role kosong).
+const kolomUser = `id, username, email, password, role, is_active, created_at`
+
+// scanUser membaca satu baris ke model.User. pgx.Row dan pgx.Rows sama-sama
+// memenuhi interface ini, jadi helper ini bisa dipakai di QueryRow maupun rows.Next().
+func scanUser(row pgx.Row, u *model.User) error {
+	return row.Scan(&u.ID, &u.Username, &u.Email, &u.Password, &u.Role, &u.IsActive, &u.CreatedAt)
 }
 
 type userPostgresRepository struct {
@@ -82,8 +94,8 @@ func (r *userPostgresRepository) FindAll(ctx context.Context, q model.ListQuery)
 	}
 
 	sqlText := fmt.Sprintf(
-		`SELECT id, username, email, password, is_active, created_at FROM users%s ORDER BY %s %s LIMIT $%d OFFSET $%d`,
-		where, kolomUrut[q.Sort], arah, len(args)+1, len(args)+2,
+		`SELECT %s FROM users%s ORDER BY %s %s LIMIT $%d OFFSET $%d`,
+		kolomUser, where, kolomUrut[q.Sort], arah, len(args)+1, len(args)+2,
 	)
 
 	args = append(args, q.Limit, q.Offset())
@@ -96,7 +108,7 @@ func (r *userPostgresRepository) FindAll(ctx context.Context, q model.ListQuery)
 	hasil := []model.User{}
 	for rows.Next() {
 		var u model.User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt); err != nil {
+		if err := scanUser(rows, &u); err != nil {
 			return nil, 0, fmt.Errorf("membaca baris user: %w", err)
 		}
 		hasil = append(hasil, u)
@@ -111,8 +123,10 @@ func (r *userPostgresRepository) FindAll(ctx context.Context, q model.ListQuery)
 
 func (r *userPostgresRepository) FindByID(ctx context.Context, id int) (model.User, error) {
 	var u model.User
-	err := r.pool.QueryRow(ctx, `SELECT id, username, email, password, is_active, created_at FROM users WHERE id = $1`, id).
-		Scan(&u.ID, &u.Username, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt)
+	err := scanUser(
+		r.pool.QueryRow(ctx, `SELECT `+kolomUser+` FROM users WHERE id = $1`, id),
+		&u,
+	)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -123,11 +137,13 @@ func (r *userPostgresRepository) FindByID(ctx context.Context, id int) (model.Us
 	return u, nil
 }
 
-// FindByUsername ditambahkan agar AuthService bisa mencari password saat proses Login.
+// FindByUsername ditambahkan agar AuthService bisa mencari password DAN role saat proses Login.
 func (r *userPostgresRepository) FindByUsername(ctx context.Context, username string) (model.User, error) {
 	var u model.User
-	err := r.pool.QueryRow(ctx, `SELECT id, username, email, password, is_active, created_at FROM users WHERE username = $1`, username).
-		Scan(&u.ID, &u.Username, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt)
+	err := scanUser(
+		r.pool.QueryRow(ctx, `SELECT `+kolomUser+` FROM users WHERE username = $1`, username),
+		&u,
+	)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -138,10 +154,12 @@ func (r *userPostgresRepository) FindByUsername(ctx context.Context, username st
 	return u, nil
 }
 
+// Create menyimpan role dari u.Role. Pastikan service (register) mengisi role
+// default dan JANGAN mengambilnya dari body request klien.
 func (r *userPostgresRepository) Create(ctx context.Context, u model.User) (model.User, error) {
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO users (username, email, password, is_active) VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
-		u.Username, u.Email, u.Password, u.IsActive,
+		`INSERT INTO users (username, email, password, role, is_active) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
+		u.Username, u.Email, u.Password, u.Role, u.IsActive,
 	).Scan(&u.ID, &u.CreatedAt)
 
 	if err != nil {
@@ -153,11 +171,16 @@ func (r *userPostgresRepository) Create(ctx context.Context, u model.User) (mode
 	return u, nil
 }
 
+// Update sengaja TIDAK mengubah role. Perubahan role sebaiknya lewat operasi
+// khusus (misalnya khusus admin), bukan lewat update profil biasa.
 func (r *userPostgresRepository) Update(ctx context.Context, u model.User) (model.User, error) {
-	err := r.pool.QueryRow(ctx,
-		`UPDATE users SET username = $1, email = $2, is_active = $3 WHERE id = $4 RETURNING id, username, email, password, is_active, created_at`,
-		u.Username, u.Email, u.IsActive, u.ID,
-	).Scan(&u.ID, &u.Username, &u.Email, &u.Password, &u.IsActive, &u.CreatedAt)
+	err := scanUser(
+		r.pool.QueryRow(ctx,
+			`UPDATE users SET username = $1, email = $2, is_active = $3 WHERE id = $4 RETURNING `+kolomUser,
+			u.Username, u.Email, u.IsActive, u.ID,
+		),
+		&u,
+	)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

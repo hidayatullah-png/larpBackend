@@ -3,14 +3,13 @@ package model
 import "time"
 
 type User struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"`
-	Role      string    `json:"role"`
-	OwnerID   int64     `json:"owner_id"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
+    ID        int       `json:"id" db:"id"`
+    Username  string    `json:"username" db:"username"`
+    Email     string    `json:"email" db:"email"`
+    Password  string    `json:"-" db:"password"`
+    Role      string    `json:"role" db:"role"`
+    IsActive  bool      `json:"is_active" db:"is_active"`
+    CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
 // POST — semua field wajib

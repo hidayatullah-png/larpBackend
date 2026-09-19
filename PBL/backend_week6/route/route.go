@@ -73,7 +73,7 @@ func Register(app *fiber.App, deps Dependencies) {
 	students.Post("/", middleware.RequirePermission(perms, "student:create"), deps.StudentService.Create)
 	students.Delete("/:id", middleware.RequirePermission(perms, "student:delete"), deps.StudentService.Delete)
 
-	// Rute yang diloloskan dari Middleware agar owner_id dicek di Service (C.2 Poin 3)
+	// Rute yang diloloskan dari Middleware agar owner_id dicek di Service 
 	students.Get("/:id", deps.StudentService.Get)
 	students.Put("/:id", deps.StudentService.Replace)
 	students.Patch("/:id", deps.StudentService.Patch)
