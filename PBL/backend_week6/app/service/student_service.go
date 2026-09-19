@@ -34,9 +34,8 @@ func (s *StudentService) Create(c *fiber.Ctx) error {
 		return helper.Fail(c, fiber.StatusBadRequest, "body harus berupa JSON yang valid")
 	}
 
-	// 2. Pemetaan dan Penyuntikan OwnerID secara paksa
-	// Menjawab C.2 Poin 4: owner_id TIDAK DIAMBIL DARI BODY JSON, melainkan dari current.UserID.
-	// Ini menutup celah Mass Assignment, di mana peretas tidak bisa mengaku-aku
+	// 2. Pemetaan dan Penyuntikan OwnerID secara paksa.
+	// Ini menutup celah Mass Assignment, di mana peretas tidak bisa melakukan fraud
 	// mendaftarkan data atas nama orang lain.
 	studentData := model.Student{
 		NIM:      req.NIM,
@@ -78,7 +77,7 @@ func (s *StudentService) Get(c *fiber.Ctx) error {
 	}
 
 	// 2. PERIKSA HAK AKSES SETELAH DATA DIAMBIL
-	// Menjawab C.2 Poin 3: Periksa apakah user ini pemiliknya, atau punya hak :any
+	// Periksa apakah user ini pemiliknya, atau punya hak :any
 	if !CanAccessStudent(current, student.OwnerID, s.perms, "student:read:any") {
 		return helper.Fail(c, fiber.StatusForbidden, "anda tidak berhak mengakses data mahasiswa lain")
 	}
@@ -96,7 +95,7 @@ func (s *StudentService) Delete(c *fiber.Ctx) error {
 		return helper.Fail(c, fiber.StatusBadRequest, "id harus berupa angka positif")
 	}
 
-	// Sesuai C.2 Poin 1: Route ini diurus oleh Middleware,
+	// Route ini diurus oleh Middleware,
 	// jadi siapa pun yang sampai ke titik ini dipastikan sudah punya izin (admin).
 	if err := s.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -141,7 +140,7 @@ func (s *StudentService) Replace(c *fiber.Ctx) error {
 		return helper.Fail(c, fiber.StatusNotFound, "data tidak ditemukan")
 	}
 
-	// TUGAS MANDIRI C.2 POIN 3: Periksa apakah ia pemiliknya atau punya hak update:any
+	// Periksa apakah ia pemiliknya atau punya hak update:any
 	if !CanAccessStudent(current, student.OwnerID, s.perms, "student:update:any") {
 		return helper.Fail(c, fiber.StatusForbidden, "tidak berhak mengubah data ini")
 	}

@@ -11,7 +11,7 @@ func CanAccessStudent(
 	perms *helper.PermissionSet,
 	anyPermission string,
 ) bool {
-	// Karena tipe datanya sekarang sudah sama-sama int, kita bisa langsung membandingkannya.
+	// Karena tipe datanya sekarang sudah sama-sama int, bisa langsung mdibandingkan.
 	if current.UserID == ownerID {
 		return true
 	}
