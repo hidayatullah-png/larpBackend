@@ -11,11 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-
 type StudentRepository interface {
 	Insert(ctx context.Context, s model.Student) (model.Student, error)
 	FindByID(ctx context.Context, id int) (model.Student, error)
 	Delete(ctx context.Context, id int) error
+	FindAll(ctx context.Context) ([]model.Student, error)
+	Update(ctx context.Context, s model.Student) (model.Student, error)
 }
 
 type studentPostgresRepository struct {
@@ -73,4 +74,34 @@ func (r *studentPostgresRepository) Delete(ctx context.Context, id int) error {
 		return ErrNotFound
 	}
 	return nil
+}
+func (r *studentPostgresRepository) FindAll(ctx context.Context) ([]model.Student, error) {
+	query := fmt.Sprintf(`SELECT %s FROM students ORDER BY id DESC`, studentColumns)
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("mengambil daftar student: %w", err)
+	}
+	defer rows.Close()
+
+	var students []model.Student
+	for rows.Next() {
+		s, err := scanStudent(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan daftar student: %w", err)
+		}
+		students = append(students, s)
+	}
+	return students, nil
+}
+
+func (r *studentPostgresRepository) Update(ctx context.Context, s model.Student) (model.Student, error) {
+	query := fmt.Sprintf(`
+		UPDATE students SET nim = $1, name = $2, is_active = $3
+		WHERE id = $4 RETURNING %s`, studentColumns)
+
+	updated, err := scanStudent(r.pool.QueryRow(ctx, query, s.NIM, s.Name, s.IsActive, s.ID))
+	if err != nil {
+		return model.Student{}, fmt.Errorf("mengupdate student: %w", err)
+	}
+	return updated, nil
 }
