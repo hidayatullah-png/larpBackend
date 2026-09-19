@@ -16,10 +16,10 @@ import (
 type Dependencies struct {
 	Pool           *pgxpool.Pool
 	JWT            *helper.JWTManager
-	Permissions    *helper.PermissionSet   // WAJIB ADA: Untuk mengecek hak akses
+	Permissions    *helper.PermissionSet  
 	UserService    *service.UserService 
 	AuthService    *service.AuthService
-	StudentService *service.StudentService // WAJIB ADA: Untuk rute mahasiswa
+	StudentService *service.StudentService 
 }
 
 // Register memasang seluruh rute API.

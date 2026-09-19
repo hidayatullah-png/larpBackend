@@ -45,8 +45,8 @@ func main() {
 	// 1. Inisialisasi Repository
 	userRepository := repository.NewUserRepository(pool)
 	tokenRepository := repository.NewTokenRepository(pool)
-	studentRepository := repository.NewStudentRepository(pool) 
-	roleRepository := repository.NewRoleRepository(pool)       
+	studentRepository := repository.NewStudentRepository(pool)
+	roleRepository := repository.NewRoleRepository(pool)
 
 	// 2. Muat pemetaan role dan permission dari database sekali saja
 	rawPermissions, err := roleRepository.LoadPermissions(context.Background())
@@ -56,26 +56,27 @@ func main() {
 	}
 
 	permissions := helper.NewPermissionSet(rawPermissions)
-	logger.Info("permission dimuat", slog.Any("roles", permissions.KnownRoles())) 
+	logger.Info("permission dimuat", slog.Any("roles", permissions.KnownRoles()))
 
 	// 3. Inisialisasi Service
 	// Catatan: Jika NewUserService/NewAuthService belum diubah untuk menerima
 	// parameter 'permissions', mungkin perlu menambahkan argument tersebut di file service masing-masing agar tidak error.
-	userService := service.NewUserService(userRepository) 
+	userService := service.NewUserService(userRepository)
 	authService := service.NewAuthService(
-		userRepository, tokenRepository, jwtManager, 
+		userRepository, tokenRepository, jwtManager,
+		permissions, // <- TAMBAHKAN VARIABEL INI DI SINI
 		time.Duration(config.GetEnvInt("JWT_REFRESH_TTL_DAYS", 7))*24*time.Hour,
 	)
-	studentService := service.NewStudentService(studentRepository, permissions) 
+	studentService := service.NewStudentService(studentRepository, permissions)
 
 	// 4. Daftarkan ke Dependencies
 	app := config.NewApp(logger, route.Dependencies{
 		Pool:           pool,
 		JWT:            jwtManager,
-		Permissions:    permissions, 
+		Permissions:    permissions,
 		UserService:    userService,
 		AuthService:    authService,
-		StudentService: studentService, 
+		StudentService: studentService,
 	})
 
 	port := config.GetEnv("APP_PORT", "3000")

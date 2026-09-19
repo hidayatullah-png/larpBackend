@@ -38,14 +38,27 @@ func corsPolicy(allowedOrigins string) fiber.Handler {
 	})
 }
 
-// RequestLogger mencatat setiap permintaan HTTP yang masuk, termasuk metode, jalur, status, dan durasi.
+// RequestLogger mencatat setiap permintaan HTTP yang masuk, termasuk metode, jalur, status, durasi,
+// dan identitas pengguna.
 func RequestLogger(logger *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		start := time.Now()
 
-		err := c.Next() // memanggil handler berikutnya
+		err := c.Next() // Membiarkan request masuk ke middleware auth dan service
+
 		requestID, _ := c.Locals("requestid").(string)
 
+		// LANGKAH 8: Ambil identitas pengguna SETELAH request selesai diproses.
+		// Jika request berhasil melewati RequireAuth, data ini pasti terisi.
+		var userID any = "guest"
+		var role string = "none"
+
+		if user, ok := helper.CurrentUser(c); ok {
+			userID = user.UserID
+			role = user.Role
+		}
+
+		// Menambahkan user_id dan role ke dalam catatan log agar 403/500 mudah diinvestigasi
 		logger.Info("http_request",
 			slog.String("request_id", requestID),
 			slog.String("method", c.Method()),
@@ -53,6 +66,8 @@ func RequestLogger(logger *slog.Logger) fiber.Handler {
 			slog.Int("status", c.Response().StatusCode()),
 			slog.Duration("duration", time.Since(start)),
 			slog.String("ip", c.IP()),
+			slog.Any("user_id", userID), 
+			slog.String("role", role),   
 		)
 		return err
 	}
