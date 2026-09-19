@@ -190,7 +190,7 @@ func (s *AuthService) Me(c *fiber.Ctx) error {
 	// PERUBAHAN: Kembalikan profil beserta daftar hak aksesnya
 	return helper.Success(c, fiber.StatusOK, "profil berhasil diambil", fiber.Map{
 		"user":        user,
-		"permissions": s.perms.PermissionsOf(user.Role),
+		"permissions": s.perms.PermissionOf(user.Role),
 	})
 }
 
