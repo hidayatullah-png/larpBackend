@@ -12,8 +12,7 @@ import (
 	"latihan-fiber/middleware"
 )
 
-// Dependencies membungkus semua kebutuhan injeksi untuk router,
-// menghindari parameter fungsi yang terlalu panjang.
+// Dependencies membungkus semua kebutuhan injeksi untuk router,menghindari parameter fungsi yang terlalu panjang.
 type Dependencies struct {
 	Pool        *pgxpool.Pool
 	JWT         *helper.JWTManager
