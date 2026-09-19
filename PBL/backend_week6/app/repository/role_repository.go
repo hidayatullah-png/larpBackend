@@ -14,7 +14,7 @@ type RoleRepository interface {
 
 type rolePostgresRepository struct{ pool *pgxpool.Pool }
 
-func newRoleRepository(pool *pgxpool.Pool) RoleRepository {
+func NewRoleRepository(pool *pgxpool.Pool) RoleRepository {
 	return &rolePostgresRepository{pool: pool}
 }
 

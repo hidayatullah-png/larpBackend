@@ -36,13 +36,13 @@ func (s *StudentService) Create(c *fiber.Ctx) error {
 
 	// 2. Pemetaan dan Penyuntikan OwnerID secara paksa
 	// Menjawab C.2 Poin 4: owner_id TIDAK DIAMBIL DARI BODY JSON, melainkan dari current.UserID.
-	// Ini menutup celah Mass Assignment, di mana peretas tidak bisa mengaku-aku 
+	// Ini menutup celah Mass Assignment, di mana peretas tidak bisa mengaku-aku
 	// mendaftarkan data atas nama orang lain.
 	studentData := model.Student{
 		NIM:      req.NIM,
 		Name:     req.Name,
 		IsActive: true,
-		OwnerID:  int64(current.UserID),
+		OwnerID:  int(current.UserID),
 	}
 
 	created, err := s.repo.Insert(ctx, studentData)
@@ -96,7 +96,7 @@ func (s *StudentService) Delete(c *fiber.Ctx) error {
 		return helper.Fail(c, fiber.StatusBadRequest, "id harus berupa angka positif")
 	}
 
-	// Sesuai C.2 Poin 1: Route ini diurus oleh Middleware, 
+	// Sesuai C.2 Poin 1: Route ini diurus oleh Middleware,
 	// jadi siapa pun yang sampai ke titik ini dipastikan sudah punya izin (admin).
 	if err := s.repo.Delete(ctx, id); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -106,4 +106,96 @@ func (s *StudentService) Delete(c *fiber.Ctx) error {
 	}
 
 	return helper.NoContent(c)
+}
+
+// List (GET /students)
+func (s *StudentService) List(c *fiber.Ctx) error {
+	ctx, cancel := helper.RequestContext(c)
+	defer cancel()
+
+	students, err := s.repo.FindAll(ctx)
+	if err != nil {
+		return helper.Fail(c, fiber.StatusInternalServerError, "gagal mengambil data")
+	}
+	return helper.Success(c, fiber.StatusOK, "berhasil", students)
+}
+
+// Replace (PUT /students/:id)
+func (s *StudentService) Replace(c *fiber.Ctx) error {
+	ctx, cancel := helper.RequestContext(c)
+	defer cancel()
+
+	current, _ := helper.CurrentUser(c)
+	id, valid := helper.ParamID(c)
+	if !valid {
+		return helper.Fail(c, fiber.StatusBadRequest, "id invalid")
+	}
+
+	var req model.ReplaceStudentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return helper.Fail(c, fiber.StatusBadRequest, "body invalid")
+	}
+
+	student, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return helper.Fail(c, fiber.StatusNotFound, "data tidak ditemukan")
+	}
+
+	// TUGAS MANDIRI C.2 POIN 3: Periksa apakah ia pemiliknya atau punya hak update:any
+	if !CanAccessStudent(current, student.OwnerID, s.perms, "student:update:any") {
+		return helper.Fail(c, fiber.StatusForbidden, "tidak berhak mengubah data ini")
+	}
+
+	student.NIM = req.NIM
+	student.Name = req.Name
+	student.IsActive = req.IsActive
+
+	updated, err := s.repo.Update(ctx, student)
+	if err != nil {
+		return helper.Fail(c, fiber.StatusInternalServerError, "gagal mengubah data")
+	}
+	return helper.Success(c, fiber.StatusOK, "berhasil", updated)
+}
+
+// Patch (PATCH /students/:id)
+func (s *StudentService) Patch(c *fiber.Ctx) error {
+	ctx, cancel := helper.RequestContext(c)
+	defer cancel()
+
+	current, _ := helper.CurrentUser(c)
+	id, valid := helper.ParamID(c)
+	if !valid {
+		return helper.Fail(c, fiber.StatusBadRequest, "id invalid")
+	}
+
+	var req model.PatchStudentRequest
+	if err := c.BodyParser(&req); err != nil {
+		return helper.Fail(c, fiber.StatusBadRequest, "body invalid")
+	}
+
+	student, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return helper.Fail(c, fiber.StatusNotFound, "data tidak ditemukan")
+	}
+
+	// TUGAS MANDIRI C.2 POIN 3: Periksa apakah ia pemiliknya atau punya hak update:any
+	if !CanAccessStudent(current, student.OwnerID, s.perms, "student:update:any") {
+		return helper.Fail(c, fiber.StatusForbidden, "tidak berhak mengubah data ini")
+	}
+
+	if req.NIM != nil {
+		student.NIM = *req.NIM
+	}
+	if req.Name != nil {
+		student.Name = *req.Name
+	}
+	if req.IsActive != nil {
+		student.IsActive = *req.IsActive
+	}
+
+	updated, err := s.repo.Update(ctx, student)
+	if err != nil {
+		return helper.Fail(c, fiber.StatusInternalServerError, "gagal mengubah data")
+	}
+	return helper.Success(c, fiber.StatusOK, "berhasil", updated)
 }
