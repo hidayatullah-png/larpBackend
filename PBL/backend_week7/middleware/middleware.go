@@ -89,7 +89,12 @@ func RequireJSON(c *fiber.Ctx) error {
 	if methodWithBody[c.Method()] {
 		ct := c.Get("Content-Type")
 		if !strings.HasPrefix(ct, fiber.MIMEApplicationJSON) {
-			return helper.Fail(c, fiber.StatusUnsupportedMediaType, "Content-Type must be application/json")
+			// Mengembalikan struktur AppError secara langsung alih-alih helper.Fail
+			return &helper.AppError{
+				Status:  fiber.StatusUnsupportedMediaType,
+				Code:    "UNSUPPORTED_MEDIA_TYPE",
+				Message: "Content-Type harus berupa application/json",
+			}
 		}
 	}
 	return c.Next()

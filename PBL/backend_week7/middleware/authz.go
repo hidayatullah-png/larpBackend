@@ -13,14 +13,13 @@ func RequirePermission(perms *helper.PermissionSet, permission string) fiber.Han
 		user, ok := helper.CurrentUser(c)
 		if !ok {
 			// Jika tidak ada, berarti token tidak valid atau RequireAuth lupa dipasang
-			return helper.Fail(c, fiber.StatusUnauthorized, "belum terautentikasi")
+			return helper.Unauthorized("belum terautentikasi")
 		}
 
 		// 2. Periksa apakah role user ini punya permission yang diminta
 		if !perms.Can(user.Role, permission) {
 			// Jika tidak punya, tolak dengan status 403 Forbidden
-			return helper.Fail(c, fiber.StatusForbidden,
-				"role "+user.Role+" tidak memiliki hak "+permission)
+			return helper.Forbidden("role " + user.Role + " tidak memiliki hak " + permission)
 		}
 
 		// 3. Jika aman, persilakan masuk ke fungsi selanjutnya (Service)

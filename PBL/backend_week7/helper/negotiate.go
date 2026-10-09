@@ -7,7 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"latihan-fiber/app/model" // Sesuaikan dengan path modulmu
+	"latihan-fiber/app/model" 
 )
 
 const (
@@ -21,8 +21,7 @@ const (
 func Negotiate(c *fiber.Ctx, offered ...string) (string, error) {
 	accept := strings.TrimSpace(c.Get(fiber.HeaderAccept))
 
-	// Tidak menyebut Accept sama sekali berarti "terserah server"
-	// Demikian pula Accept: */* yang dikirim hampir semua tool CLI
+	// Tidak menyebut Accept sama sekali berarti "terserah server" Demikian pula Accept: */* yang dikirim hampir semua tool CLI
 	if accept == "" {
 		return offered[0], nil
 	}
@@ -66,7 +65,7 @@ func WriteStudentsCSV(c *fiber.Ctx, students []model.Student) error {
 	}
 
 	// PERBAIKAN BUG 7: writer.Flush() wajib dipanggil sebelum memeriksa writer.Error()
-	// agar data yang tertahan di buffer ditulis seutuhnya ke dalam string builder[cite: 52, 60].
+	// agar data yang tertahan di buffer ditulis seutuhnya ke dalam string builder
 	writer.Flush()
 
 	if err := writer.Error(); err != nil {
@@ -76,8 +75,8 @@ func WriteStudentsCSV(c *fiber.Ctx, students []model.Student) error {
 	return c.SendString(buffer.String())
 }
 
-// WriteUsersCSV menuliskan daftar user sebagai CSV[cite: 17].
-// Header Content-Disposition membuat browser menawarkan unduhan[cite: 17].
+// WriteUsersCSV menuliskan daftar user sebagai CSV
+// Header Content-Disposition membuat browser menawarkan unduhan
 func WriteUsersCSV(c *fiber.Ctx, users []model.User) error {
 	c.Set(fiber.HeaderContentType, FormatCSV+"; charset=utf-8")
 	c.Set(fiber.HeaderContentDisposition, `attachment; filename="users.csv"`)

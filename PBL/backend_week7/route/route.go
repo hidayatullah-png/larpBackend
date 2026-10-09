@@ -12,7 +12,6 @@ import (
 	"latihan-fiber/middleware"
 )
 
-// Dependencies membungkus semua kebutuhan injeksi untuk router, menghindari parameter fungsi yang terlalu panjang.
 type Dependencies struct {
 	Pool           *pgxpool.Pool
 	JWT            *helper.JWTManager
@@ -30,57 +29,40 @@ func Register(app *fiber.App, deps Dependencies) {
 	api.Get("/health", healthCheck(deps.Pool))
 
 	// --- Autentikasi ---
-	auth := api.Group("/auth", middleware.RequireJSON)
-
-	auth.Post("/register", deps.AuthService.Register)
-	auth.Post("/login", middleware.LoginRateLimiter(), deps.AuthService.Login)
-	auth.Post("/refresh", deps.AuthService.Refresh)
-	auth.Post("/logout", deps.AuthService.Logout)
-
-	// Dilindungi oleh satpam RequireAuth
+	auth := api.Group("/auth")
+	auth.Post("/register", middleware.RequireJSON, deps.AuthService.Register)
+	auth.Post("/login", middleware.RequireJSON, middleware.LoginRateLimiter(), deps.AuthService.Login)
+	auth.Post("/refresh", middleware.RequireJSON, deps.AuthService.Refresh)
+	auth.Post("/logout", middleware.RequireJSON, deps.AuthService.Logout)
 	auth.Get("/me", middleware.RequireAuth(deps.JWT), deps.AuthService.Me)
 
-	// Variabel perms agar lebih singkat saat dipanggil di middleware
 	perms := deps.Permissions
 
 	// --- RUTE USERS ---
-	users := api.Group("/users",
-		middleware.RequireJSON,
-		middleware.RequireAuth(deps.JWT),
-	)
+	// RequireJSON dilepas dari level grup agar tidak memblokir GET List (Unduh CSV)
+	users := api.Group("/users", middleware.RequireAuth(deps.JWT))
 
-	// Rute yang dicegat Middleware (tidak butuh lihat data)
 	users.Get("/", middleware.RequirePermission(perms, "user:list"), deps.UserService.List)
-	users.Post("/", middleware.RequirePermission(perms, "user:update:any"), deps.UserService.Create)
-	users.Delete("/:id", middleware.RequirePermission(perms, "user:delete"), deps.UserService.Delete)
-
-	// Jika ada fitur Assign Role
-	// users.Patch("/:id/role", middleware.RequirePermission(perms, "role:assign"), deps.UserService.AssignRole)
-
-	// Rute yang diloloskan dari Middleware (hak diurus oleh Service)
 	users.Get("/:id", deps.UserService.Get)
-	users.Put("/:id", deps.UserService.Replace)
-	users.Patch("/:id", deps.UserService.Patch)
+	users.Delete("/:id", middleware.RequirePermission(perms, "user:delete"), deps.UserService.Delete)
+	
+	// RequireJSON dipasang secara spesifik di rute yang membutuhkan body JSON
+	users.Post("/", middleware.RequireJSON, middleware.RequirePermission(perms, "user:update:any"), deps.UserService.Create)
+	users.Put("/:id", middleware.RequireJSON, deps.UserService.Replace)
+	users.Patch("/:id", middleware.RequireJSON, deps.UserService.Patch)
 
-	// --- RUTE STUDENTS
-	students := api.Group("/students",
-		middleware.RequireJSON,
-		middleware.RequireAuth(deps.JWT),
-	)
+	// --- RUTE STUDENTS ---
+	// RequireJSON dilepas dari level grup agar tidak memblokir GET List (Unduh CSV)
+	students := api.Group("/students", middleware.RequireAuth(deps.JWT))
 
-	// Rute yang dicegat Middleware
 	students.Get("/", middleware.RequirePermission(perms, "student:list"), deps.StudentService.List)
-	students.Post("/", middleware.RequirePermission(perms, "student:create"), deps.StudentService.Create)
+	students.Get("/:id", deps.StudentService.Get)
 	students.Delete("/:id", middleware.RequirePermission(perms, "student:delete"), deps.StudentService.Delete)
 
-	// Rute yang diloloskan dari Middleware agar owner_id dicek di Service
-	students.Get("/:id", deps.StudentService.Get)
-	students.Put("/:id", deps.StudentService.Replace)
-	students.Patch("/:id", deps.StudentService.Patch)
-
-	app.Use(func(c *fiber.Ctx) error {
-		return helper.NotFound("endpoint tidak ditemukan")
-	})
+	// RequireJSON dipasang secara spesifik di rute yang membutuhkan body JSON
+	students.Post("/", middleware.RequireJSON, middleware.RequirePermission(perms, "student:create"), deps.StudentService.Create)
+	students.Put("/:id", middleware.RequireJSON, deps.StudentService.Replace)
+	students.Patch("/:id", middleware.RequireJSON, deps.StudentService.Patch)
 }
 
 // healthCheck dipisah menjadi fungsi closure agar fungsi Register lebih bersih.
@@ -90,7 +72,12 @@ func healthCheck(db *pgxpool.Pool) fiber.Handler {
 		defer cancel()
 
 		if err := db.Ping(ctx); err != nil {
-			return helper.Fail(c, fiber.StatusServiceUnavailable, "koneksi database terputus")
+			// Mengembalikan AppError alih-alih menggunakan helper.Fail yang sudah dihapus
+			return &helper.AppError{
+				Status:  fiber.StatusServiceUnavailable,
+				Code:    "SERVICE_UNAVAILABLE",
+				Message: "koneksi database terputus",
+			}
 		}
 
 		return helper.Success(c, fiber.StatusOK, "layanan dan database berjalan normal", map[string]interface{}{
@@ -98,5 +85,4 @@ func healthCheck(db *pgxpool.Pool) fiber.Handler {
 			"database": "CONNECTED",
 		})
 	}
-
 }
