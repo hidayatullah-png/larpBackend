@@ -12,8 +12,7 @@ import (
 )
 
 // RequireAuth memeriksa access token pada header Authorization.
-// Bila tokennya sah, identitas pemakai disimpan di Locals agar dapat
-// dibaca service tanpa memeriksa ulang.
+// Bila tokennya sah, identitas pemakai disimpan di Locals agar dapat dibaca service tanpa memeriksa ulang.
 func RequireAuth(jwtManager *helper.JWTManager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		token, err := bearerToken(c)
@@ -60,8 +59,7 @@ func bearerToken(c *fiber.Ctx) (string, error) {
 }
 
 // LoginRateLimiter membatasi jumlah percobaan login dari satu alamat IP.
-// Tanpa pembatasan ini, penyerang dapat mencoba ribuan password per menit
-// (serangan brute force) tanpa hambatan apa pun.
+// Tanpa pembatasan ini, penyerang dapat mencoba ribuan password per menit (serangan brute force) tanpa hambatan apa pun.
 func LoginRateLimiter() fiber.Handler {
 	return limiter.New(limiter.Config{
 		Max:        5,
