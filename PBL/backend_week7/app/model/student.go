@@ -32,3 +32,21 @@ type PatchStudentRequest struct {
     Grade    *float64 `json:"grade,omitempty" validate:"omitnil,min=0,max=100"`
     IsActive *bool    `json:"is_active,omitempty"`
 }
+type Cursor struct {
+	CreatedAt time.Time
+	ID        int
+}
+
+type CursorQuery struct {
+	Limit    int
+	Search   string
+	IsActive *bool
+	After    *Cursor
+}
+
+// CursorMeta menggantikan Meta lama pada endpoint yang memakai kursor[cite: 41].
+type CursorMeta struct {
+	Limit      int    `json:"limit"`
+	NextCursor string `json:"next_cursor,omitempty"`
+	HasMore    bool   `json:"has_more"`
+}

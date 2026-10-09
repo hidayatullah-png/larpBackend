@@ -73,8 +73,7 @@ func (r *tokenPostgresRepository) Revoke(ctx context.Context, tokenHash string) 
 	return nil
 }
 
-// RevokeAllForUser dipakai ketika password diganti atau ketika
-// terdeteksi penyalahgunaan token.
+// RevokeAllForUser dipakai ketika password diganti atau ketika terdeteksi penyalahgunaan token.
 func (r *tokenPostgresRepository) RevokeAllForUser(ctx context.Context, userID int) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE refresh_tokens SET revoked_at = NOW()
