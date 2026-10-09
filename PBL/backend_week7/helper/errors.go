@@ -16,7 +16,7 @@ const (
 	CodeNotAcceptable      = "NOT_ACCEPTABLE"
 	CodeTooManyRequests    = "TOO_MANY_REQUESTS"
 	CodeInternal           = "INTERNAL_ERROR"
-	CodeServiceUnavailable = "SERVICE_UNAVAILABLE" 
+	CodeServiceUnavailable = "SERVICE_UNAVAILABLE"
 )
 
 type AppError struct {
@@ -24,7 +24,7 @@ type AppError struct {
 	Code    string
 	Message string
 	Fields  map[string]string
-	cause   error 
+	cause   error
 }
 
 func (e *AppError) Error() string {
@@ -55,12 +55,12 @@ func Conflict(message string) *AppError {
 	return &AppError{Status: fiber.StatusConflict, Code: CodeConflict, Message: message}
 }
 
-// PERBAIKAN BUG 1: Status diubah dari StatusBadRequest (400) menjadi StatusUnprocessableEntity 
+// PERBAIKAN BUG 1: Status diubah dari StatusBadRequest (400) menjadi StatusUnprocessableEntity
 func Validation(fields map[string]string) *AppError {
 	return &AppError{
-		Status:  fiber.StatusUnprocessableEntity, 
+		Status:  fiber.StatusUnprocessableEntity,
 		Code:    CodeValidation,
-		Message: "validasi gagal", 
+		Message: "validasi gagal",
 		Fields:  fields,
 	}
 }
@@ -76,6 +76,7 @@ func Internal(cause error) *AppError {
 		Message: "terjadi kesalahan pada server", cause: cause,
 	}
 }
+
 // Tambahan fungsi pelengkap sesuai instruksi[cite: 33]
 func UnsupportedMediaType(message string) *AppError {
 	return &AppError{Status: fiber.StatusUnsupportedMediaType, Code: CodeUnsupportedMedia, Message: message}
@@ -85,4 +86,11 @@ func TooManyRequests(message string) *AppError {
 }
 func ServiceUnavailable(message string) *AppError {
 	return &AppError{Status: fiber.StatusServiceUnavailable, Code: CodeServiceUnavailable, Message: message}
+}
+func RequestID(c *fiber.Ctx) string {
+	id, ok := c.Locals("requestid").(string)
+	if !ok {
+		return ""
+	}
+	return id
 }

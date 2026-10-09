@@ -16,10 +16,10 @@ import (
 type Dependencies struct {
 	Pool           *pgxpool.Pool
 	JWT            *helper.JWTManager
-	Permissions    *helper.PermissionSet  
-	UserService    *service.UserService 
+	Permissions    *helper.PermissionSet
+	UserService    *service.UserService
 	AuthService    *service.AuthService
-	StudentService *service.StudentService 
+	StudentService *service.StudentService
 }
 
 // Register memasang seluruh rute API.
@@ -53,7 +53,7 @@ func Register(app *fiber.App, deps Dependencies) {
 	users.Get("/", middleware.RequirePermission(perms, "user:list"), deps.UserService.List)
 	users.Post("/", middleware.RequirePermission(perms, "user:update:any"), deps.UserService.Create)
 	users.Delete("/:id", middleware.RequirePermission(perms, "user:delete"), deps.UserService.Delete)
-	
+
 	// Jika ada fitur Assign Role
 	// users.Patch("/:id/role", middleware.RequirePermission(perms, "role:assign"), deps.UserService.AssignRole)
 
@@ -62,21 +62,25 @@ func Register(app *fiber.App, deps Dependencies) {
 	users.Put("/:id", deps.UserService.Replace)
 	users.Patch("/:id", deps.UserService.Patch)
 
-	// --- RUTE STUDENTS 
+	// --- RUTE STUDENTS
 	students := api.Group("/students",
 		middleware.RequireJSON,
 		middleware.RequireAuth(deps.JWT),
 	)
 
-	// Rute yang dicegat Middleware 
+	// Rute yang dicegat Middleware
 	students.Get("/", middleware.RequirePermission(perms, "student:list"), deps.StudentService.List)
 	students.Post("/", middleware.RequirePermission(perms, "student:create"), deps.StudentService.Create)
 	students.Delete("/:id", middleware.RequirePermission(perms, "student:delete"), deps.StudentService.Delete)
 
-	// Rute yang diloloskan dari Middleware agar owner_id dicek di Service 
+	// Rute yang diloloskan dari Middleware agar owner_id dicek di Service
 	students.Get("/:id", deps.StudentService.Get)
 	students.Put("/:id", deps.StudentService.Replace)
 	students.Patch("/:id", deps.StudentService.Patch)
+
+	app.Use(func(c *fiber.Ctx) error {
+		return helper.NotFound("endpoint tidak ditemukan")
+	})
 }
 
 // healthCheck dipisah menjadi fungsi closure agar fungsi Register lebih bersih.
@@ -94,4 +98,5 @@ func healthCheck(db *pgxpool.Pool) fiber.Handler {
 			"database": "CONNECTED",
 		})
 	}
+
 }
