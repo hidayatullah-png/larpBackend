@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"errors"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -24,8 +25,7 @@ func Register(app *fiber.App, logger *slog.Logger, allowedOrigins string) {
 }
 
 // corsPolicy membatasi origin yang boleh memanggil API.
-// cors.New() tanpa konfigurasi mengizinkan SEMUA origin — cukup untuk
-// latihan pertemuan 2, tetapi tidak untuk API yang memakai token.
+// cors.New() tanpa konfigurasi mengizinkan SEMUA origin
 func corsPolicy(allowedOrigins string) fiber.Handler {
 	if strings.TrimSpace(allowedOrigins) == "" {
 		allowedOrigins = "http://localhost:5173"
@@ -43,32 +43,37 @@ func corsPolicy(allowedOrigins string) fiber.Handler {
 func RequestLogger(logger *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		start := time.Now()
-
-		err := c.Next() // Membiarkan request masuk ke middleware auth dan service
-
+		
+		// 1. Lanjutkan eksekusi ke handler berikutnya
+		err := c.Next()
+		
 		requestID, _ := c.Locals("requestid").(string)
-
-		// LANGKAH 8: Ambil identitas pengguna SETELAH request selesai diproses.
-		// Jika request berhasil melewati RequireAuth, data ini pasti terisi.
-		var userID any = "guest"
-		var role string = "none"
-
-		if user, ok := helper.CurrentUser(c); ok {
-			userID = user.UserID
-			role = user.Role
+		
+		// 2. Ambil status bawaan
+		status := c.Response().StatusCode()
+		
+		// 3. KOREKSI STATUS LOG
+		// Jika terjadi error, kita tidak bisa mengandalkan c.Response().StatusCode() karena ErrorHandler belum merakit balasan HTTP-nya.
+		if err != nil {
+			var appErr *helper.AppError
+			if errors.As(err, &appErr) {
+				status = appErr.Status // Ambil status asli dari AppError (misal 404, 422)
+			} else {
+				status = fiber.StatusInternalServerError // Error tak terduga selalu 500
+			}
 		}
 
-		// Menambahkan user_id dan role ke dalam catatan log agar 403/500 mudah diinvestigasi
+		// 4. Catat ke log dengan variabel `status` yang sudah dikoreksi
 		logger.Info("http_request",
 			slog.String("request_id", requestID),
 			slog.String("method", c.Method()),
 			slog.String("path", c.Path()),
-			slog.Int("status", c.Response().StatusCode()),
+			slog.Int("status", status), // <-- PASTIKAN MENGGUNAKAN VARIABEL `status`
 			slog.Duration("duration", time.Since(start)),
 			slog.String("ip", c.IP()),
-			slog.Any("user_id", userID), 
-			slog.String("role", role),   
 		)
+
+		// 5. Kembalikan error agar ErrorHandler terpusat bisa memprosesnya
 		return err
 	}
 }
@@ -89,3 +94,4 @@ func RequireJSON(c *fiber.Ctx) error {
 	}
 	return c.Next()
 }
+
