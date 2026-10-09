@@ -93,16 +93,55 @@ func (s *StudentService) Delete(c *fiber.Ctx) error {
 	return helper.NoContent(c)
 }
 
-// List (GET /students)
 func (s *StudentService) List(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
 
-	students, err := s.repo.FindAll(ctx)
+	// 1. Negosiasi format SEBELUM query dijalankan[cite: 43].
+	format, err := helper.Negotiate(c, helper.FormatJSON, helper.FormatCSV)
+	if err != nil {
+		return err
+	}
+
+	// 2. Persiapkan Cursor (Anda bisa memisahkan parsing URL ke helper terpisah)
+	limit := c.QueryInt("limit", 10)
+	cursorStr := c.Query("cursor")
+
+	q := model.CursorQuery{Limit: limit}
+
+	if cursorStr != "" {
+		parsedCursor, err := helper.DecodeCursor(cursorStr)
+		if err != nil {
+			return err
+		}
+		q.After = &parsedCursor
+	}
+
+	// 3. Ambil data dari repository
+	rows, err := s.repo.FindAfterCursor(ctx, q)
 	if err != nil {
 		return translateError(err, "mahasiswa")
 	}
-	return helper.Success(c, fiber.StatusOK, "berhasil", students)
+
+	// 4. Kirim sebagai CSV jika formatnya diminta[cite: 43]
+	if format == helper.FormatCSV {
+		// Baris tambahan limit+1 TIDAK dipotong untuk CSV
+		return helper.WriteStudentsCSV(c, rows)
+	}
+
+	// 5. Eksekusi logika Cursor khusus JSON
+	hasMore := len(rows) > q.Limit
+	if hasMore {
+		rows = rows[:q.Limit] // Potong baris tambahan hasil limit+1[cite: 42].
+	}
+
+	meta := &model.CursorMeta{Limit: q.Limit, HasMore: hasMore}
+	if hasMore && len(rows) > 0 {
+		last := rows[len(rows)-1]
+		meta.NextCursor = helper.EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	return helper.SuccessCursor(c, "daftar mahasiswa berhasil diambil", rows, meta)
 }
 
 // Replace (PUT /students/:id)

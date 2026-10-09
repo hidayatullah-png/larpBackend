@@ -27,6 +27,7 @@ type UserRepository interface {
 	Create(ctx context.Context, u model.User) (model.User, error)
 	Update(ctx context.Context, u model.User) (model.User, error)
 	Delete(ctx context.Context, id int) error
+	FindAfterCursor(ctx context.Context, q model.CursorQuery) ([]model.User, error)
 }
 
 // kolomUrut adalah daftar putih: pemetaan dari nilai yang boleh dikirim klien
@@ -75,6 +76,51 @@ func buildFilter(q model.ListQuery) (string, []any) {
 	}
 
 	return where, args
+}
+func (r *userPostgresRepository) FindAfterCursor(ctx context.Context, q model.CursorQuery) ([]model.User, error) {
+	args := []any{}
+	where := "WHERE 1=1"
+
+	if q.Search != "" {
+		args = append(args, "%"+q.Search+"%")
+		where += fmt.Sprintf(" AND username ILIKE $%d", len(args))
+	}
+	if q.IsActive != nil {
+		args = append(args, *q.IsActive)
+		where += fmt.Sprintf(" AND is_active = $%d", len(args))
+	}
+
+	if q.After != nil {
+		args = append(args, q.After.CreatedAt, q.After.ID)
+		where += fmt.Sprintf(" AND (created_at, id) < ($%d, $%d)", len(args)-1, len(args))
+	}
+
+	args = append(args, q.Limit+1)
+
+	query := fmt.Sprintf(`
+		SELECT id, username, email, password, role, is_active, created_at 
+		FROM users %s 
+		ORDER BY created_at DESC, id DESC 
+		LIMIT $%d`, where, len(args))
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("mengambil daftar user: %w", err)
+	}
+	defer rows.Close()
+
+	var result []model.User
+	for rows.Next() {
+		var u model.User
+		if err := scanUser(rows, &u); err != nil {
+			return nil, fmt.Errorf("membaca baris user: %w", err)
+		}
+		result = append(result, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *userPostgresRepository) FindAll(ctx context.Context, q model.ListQuery) ([]model.User, int, error) {

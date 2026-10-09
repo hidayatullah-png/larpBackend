@@ -28,3 +28,17 @@ func Created(c *fiber.Ctx, message string, data any, location string) error {
 func NoContent(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent) // 204: berhasil, tanpa body
 }
+
+func SuccessCursor(c *fiber.Ctx, message string, data any, meta *model.CursorMeta) error {
+	return c.Status(fiber.StatusOK).JSON(struct {
+		Success bool              `json:"success"`
+		Message string            `json:"message"`
+		Data    any               `json:"data"`
+		Meta    *model.CursorMeta `json:"meta"`
+	}{
+		Success: true,
+		Message: message,
+		Data:    data,
+		Meta:    meta,
+	})
+}

@@ -48,7 +48,7 @@ func (s *UserService) List(c *fiber.Ctx) error {
 		return helper.WriteUsersCSV(c, rows)
 	}
 
-	// Baris tambahan hasil limit+1 dipotong di sini[cite: 42].
+	// Baris tambahan hasil limit+1 dipotong di sini
 	hasMore := len(rows) > q.Limit
 	if hasMore {
 		rows = rows[:q.Limit]
@@ -89,7 +89,7 @@ func (s *UserService) Create(c *fiber.Ctx) error {
 		return helper.BadRequest("body harus berupa JSON yang valid")
 	}
 
-	// Validasi deklaratif terpusat[cite: 39]
+	// Validasi deklaratif terpusat
 	if errs := helper.ValidateStruct(req); errs != nil {
 		return helper.Validation(errs)
 	}
@@ -121,7 +121,7 @@ func (s *UserService) Replace(c *fiber.Ctx) error {
 		return helper.BadRequest("body harus berupa JSON yang valid")
 	}
 
-	// Validasi deklaratif terpusat[cite: 39]
+	// Validasi deklaratif terpusat
 	if errs := helper.ValidateStruct(req); errs != nil {
 		return helper.Validation(errs)
 	}
@@ -153,12 +153,12 @@ func (s *UserService) Patch(c *fiber.Ctx) error {
 		return helper.BadRequest("body harus berupa JSON yang valid")
 	}
 
-
 	if errs := helper.ValidateStruct(req); errs != nil {
 		return helper.Validation(errs)
 	}
 
-	if IsEmptyPatch(req) {
+	// Pengecekan inline agar tidak perlu fungsi IsEmptyPatch dari luar
+	if req.Username == nil && req.Email == nil && req.IsActive == nil {
 		return helper.BadRequest("tidak ada field yang diubah")
 	}
 
@@ -167,7 +167,18 @@ func (s *UserService) Patch(c *fiber.Ctx) error {
 		return translateUserError(err, "user")
 	}
 
-	updated := ApplyPatch(current, req)
+	updated := current
+
+	// Terapkan data baru hanya jika field-nya dikirim (tidak nil)
+	if req.Username != nil {
+		updated.Username = strings.TrimSpace(*req.Username)
+	}
+	if req.Email != nil {
+		updated.Email = strings.TrimSpace(*req.Email)
+	}
+	if req.IsActive != nil {
+		updated.IsActive = *req.IsActive
+	}
 
 	result, err := s.repo.Update(ctx, updated)
 	if err != nil {
@@ -193,7 +204,7 @@ func (s *UserService) Delete(c *fiber.Ctx) error {
 	return helper.NoContent(c)
 }
 
-// translateUserError mengubah error milik repository menjadi AppError[cite: 36].
+// translateUserError mengubah error milik repository menjadi AppError
 func translateUserError(err error, entity string) error {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
@@ -201,7 +212,7 @@ func translateUserError(err error, entity string) error {
 	case errors.Is(err, repository.ErrDuplicate):
 		return helper.Conflict("username sudah dipakai")
 	default:
-		// Mengembalikan error internal untuk dicatat di log tanpa membocorkan detail SQL ke client[cite: 36, 46].
+		// Mengembalikan error internal untuk dicatat di log tanpa membocorkan detail SQL ke client
 		return helper.Internal(err)
 	}
 }
