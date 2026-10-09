@@ -3,13 +3,13 @@ package model
 import "time"
 
 type User struct {
-    ID        int       `json:"id" db:"id"`
-    Username  string    `json:"username" db:"username"`
-    Email     string    `json:"email" db:"email"`
-    Password  string    `json:"-" db:"password"`
-    Role      string    `json:"role" db:"role"`
-    IsActive  bool      `json:"is_active" db:"is_active"`
-    CreatedAt time.Time `json:"created_at" db:"created_at"`
+	ID        int       `json:"id" db:"id"`
+	Username  string    `json:"username" db:"username"`
+	Email     string    `json:"email" db:"email"`
+	Password  string    `json:"-" db:"password"`
+	Role      string    `json:"role" db:"role"`
+	IsActive  bool      `json:"is_active" db:"is_active"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
 // POST — semua field wajib
@@ -58,6 +58,15 @@ type ListQuery struct {
 	Order    string
 	IsActive *bool
 }
+
+type ErrorResponse struct {
+	Success   bool              `json:"success"`
+	Code      string            `json:"code"`
+	Message   string            `json:"message"`
+	Fields    map[string]string `json:"fields,omitempty"`
+	RequestID string            `json:"request_id,omitempty"`
+}
+
 func (q ListQuery) Offset() int {
 	if q.Page <= 0 {
 		return 0
