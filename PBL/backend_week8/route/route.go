@@ -19,6 +19,7 @@ type Dependencies struct {
 	UserService    *service.UserService
 	AuthService    *service.AuthService
 	StudentService *service.StudentService
+	CourseService  *service.CourseService
 }
 
 // Register memasang seluruh rute API.
@@ -45,7 +46,7 @@ func Register(app *fiber.App, deps Dependencies) {
 	users.Get("/", middleware.RequirePermission(perms, "user:list"), deps.UserService.List)
 	users.Get("/:id", deps.UserService.Get)
 	users.Delete("/:id", middleware.RequirePermission(perms, "user:delete"), deps.UserService.Delete)
-	
+
 	// RequireJSON dipasang secara spesifik di rute yang membutuhkan body JSON
 	users.Post("/", middleware.RequireJSON, middleware.RequirePermission(perms, "user:update:any"), deps.UserService.Create)
 	users.Put("/:id", middleware.RequireJSON, deps.UserService.Replace)
@@ -63,6 +64,16 @@ func Register(app *fiber.App, deps Dependencies) {
 	students.Post("/", middleware.RequireJSON, middleware.RequirePermission(perms, "student:create"), deps.StudentService.Create)
 	students.Put("/:id", middleware.RequireJSON, deps.StudentService.Replace)
 	students.Patch("/:id", middleware.RequireJSON, deps.StudentService.Patch)
+
+	// kelas dan KRS
+	courses := api.Group("/courses",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT))
+
+	// "/mine" didaftarkan SEBELUM "/:id"
+	courses.Get("/", deps.CourseService.List)
+	courses.Get("/mine", deps.CourseService.Mine)
+	courses.Get("/:id", deps.CourseService.Get)
 }
 
 // healthCheck dipisah menjadi fungsi closure agar fungsi Register lebih bersih.

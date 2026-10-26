@@ -69,6 +69,9 @@ func main() {
 	)
 	studentService := service.NewStudentService(studentRepository, permissions)
 
+	courseRepository := repository.NewCourseRepository(pool)
+	courseService := service.NewCourseService(courseRepository)
+
 	// 4. Daftarkan ke Dependencies
 	app := config.NewApp(logger, route.Dependencies{
 		Pool:           pool,
@@ -77,6 +80,7 @@ func main() {
 		UserService:    userService,
 		AuthService:    authService,
 		StudentService: studentService,
+		CourseService:  courseService,
 	})
 
 	port := config.GetEnv("APP_PORT", "3000")
