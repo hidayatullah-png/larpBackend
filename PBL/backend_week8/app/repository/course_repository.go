@@ -10,8 +10,10 @@ import (
 )
 
 var (
-	ErrCourseFull  = errors.New("kuota kelas sudah penuh")
-	ErrNotEnrolled = errors.New("tidak terdaftar di kelas ini")
+	ErrCourseFull       = errors.New("kuota kelas sudah penuh")
+	ErrNotEnrolled      = errors.New("tidak terdaftar di kelas ini")
+	ErrVersionConflict  = errors.New("data sudah diubah pihak lain")
+	ErrQuotaBelowFilled = errors.New("kuota lebih kecil dari jumlah peserta")
 )
 
 type CourseRepository interface {
@@ -25,6 +27,8 @@ type CourseRepository interface {
 	IncrementEnrolled(ctx context.Context, courseID int) (model.Course, error)
 	DecrementEnrolled(ctx context.Context, courseID int) (model.Course, error)
 	DeleteEnrollment(ctx context.Context, courseID, userID int) error
+	LockCourses(ctx context.Context, ids ...int) error
+	UpdateQuota(ctx context.Context, id, quota, version int) (model.Course, error)
 }
 
 const courseColumns = `id, code, name, credits, quota, enrolled_count, version, created_at`
@@ -172,4 +176,50 @@ func (r *coursePostgresRepository) DeleteEnrollment(ctx context.Context, courseI
 		return ErrNotEnrolled
 	}
 	return nil
+}
+// LockCourses mengunci beberapa kelas sekaligus, SELALU dalam urutan id
+// menaik, apa pun urutan argumennya, untuk mencegah deadlock.
+func (r *coursePostgresRepository) LockCourses(ctx context.Context, ids ...int) error {
+	rows, err := r.db.Query(ctx,
+		"SELECT id FROM courses WHERE id = ANY($1) ORDER BY id FOR UPDATE", ids)
+	if err != nil {
+		return fmt.Errorf("mengunci kelas: %w", err)
+	}
+	defer rows.Close()
+
+	found := 0
+	for rows.Next() {
+		found++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("mengunci kelas: %w", err)
+	}
+	if found != len(ids) {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateQuota menerapkan optimistic locking.
+// PERBAIKAN BUG #9: Tambahkan ", version = version + 1" dan gunakan "$1 >= enrolled_count"
+func (r *coursePostgresRepository) UpdateQuota(ctx context.Context, id, quota, version int) (model.Course, error) {
+	c, err := scanCourse(r.db.QueryRow(ctx, `
+		UPDATE courses SET quota = $1, version = version + 1
+		WHERE id = $2 AND version = $3 AND $1 >= enrolled_count
+		RETURNING `+courseColumns, quota, id, version))
+	if err == nil {
+		return c, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return model.Course{}, fmt.Errorf("mengubah kuota: %w", err)
+	}
+
+	current, findErr := r.FindByID(ctx, id)
+	if findErr != nil {
+		return model.Course{}, findErr
+	}
+	if current.Version != version {
+		return model.Course{}, ErrVersionConflict
+	}
+	return model.Course{}, ErrQuotaBelowFilled
 }

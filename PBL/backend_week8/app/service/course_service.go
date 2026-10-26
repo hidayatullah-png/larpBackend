@@ -165,6 +165,106 @@ func (s *CourseService) Drop(c *fiber.Ctx) error {
 	return helper.NoContent(c)
 }
 
+// POST /enrollments/swap
+func (s *CourseService) Swap(c *fiber.Ctx) error {
+	ctx, cancel := helper.RequestContext(c)
+	defer cancel()
+
+	current, ok := helper.CurrentUser(c)
+	if !ok {
+		return helper.Unauthorized("belum terautentikasi")
+	}
+
+	var req model.SwapRequest
+	if err := c.BodyParser(&req); err != nil {
+		return helper.BadRequest("body harus berupa JSON yang valid")
+	}
+	if errs := helper.ValidateStruct(req); errs != nil {
+		return helper.Validation(errs)
+	}
+	if req.FromCourseID == req.ToCourseID {
+		return helper.Validation(map[string]string{
+			"to_course_id": "tidak boleh sama dengan from_course_id",
+		})
+	}
+
+	var joined model.Course
+	err := s.tx.WithTx(ctx, func(tx repository.DBTX) error {
+		repo := s.courses.WithTx(tx)
+
+		if err := repo.LockStudent(ctx, current.UserID); err != nil {
+			return err
+		}
+
+		// Kunci KEDUA kelas lebih dulu, dalam urutan id menaik.
+		if err := repo.LockCourses(ctx, req.FromCourseID, req.ToCourseID); err != nil {
+			return err
+		}
+
+		from, err := repo.FindByID(ctx, req.FromCourseID)
+		if err != nil {
+			return err
+		}
+		to, err := repo.FindByID(ctx, req.ToCourseID)
+		if err != nil {
+			return err
+		}
+
+		taken, err := repo.SumCredits(ctx, current.UserID)
+		if err != nil {
+			return err
+		}
+		if CreditsAfterSwap(taken, from.Credits, to.Credits) > MaxCreditsPerSemester {
+			return errCreditLimit
+		}
+
+		if err := repo.DeleteEnrollment(ctx, req.FromCourseID, current.UserID); err != nil {
+			return err
+		}
+		// PERBAIKAN BUG #8: Wajib memakai repo (di dalam tx), BUKAN s.courses (pool di luar tx)
+		if _, err := repo.DecrementEnrolled(ctx, req.FromCourseID); err != nil {
+			return err
+		}
+
+		joined, err = repo.IncrementEnrolled(ctx, req.ToCourseID)
+		if err != nil {
+			return err
+		}
+		return repo.InsertEnrollment(ctx, req.ToCourseID, current.UserID)
+	})
+	if err != nil {
+		return translateCourseError(err)
+	}
+
+	return helper.Success(c, fiber.StatusOK, "berhasil pindah kelas", joined)
+}
+
+// PATCH /courses/:id
+func (s *CourseService) UpdateQuota(c *fiber.Ctx) error {
+	ctx, cancel := helper.RequestContext(c)
+	defer cancel()
+
+	id, valid := helper.ParamID(c)
+	if !valid {
+		return helper.BadRequest("id harus berupa angka positif")
+	}
+
+	var req model.UpdateQuotaRequest
+	if err := c.BodyParser(&req); err != nil {
+		return helper.BadRequest("body harus berupa JSON yang valid")
+	}
+	if errs := helper.ValidateStruct(req); errs != nil {
+		return helper.Validation(errs)
+	}
+
+	// Satu pernyataan UPDATE saja, sehingga tidak perlu WithTx
+	updated, err := s.courses.UpdateQuota(ctx, id, req.Quota, req.Version)
+	if err != nil {
+		return translateCourseError(err)
+	}
+	return helper.Success(c, fiber.StatusOK, "kuota berhasil diubah", updated)
+}
+
 func translateCourseError(err error) error {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
@@ -178,6 +278,12 @@ func translateCourseError(err error) error {
 	case errors.Is(err, errCreditLimit):
 		return helper.NewError(fiber.StatusConflict, "CREDIT_LIMIT_EXCEEDED",
 			"batas "+strconv.Itoa(MaxCreditsPerSemester)+" SKS terlampaui")
+	case errors.Is(err, repository.ErrVersionConflict):
+		return helper.NewError(fiber.StatusConflict, "VERSION_CONFLICT",
+			"data kelas sudah diubah pihak lain, muat ulang lalu coba lagi")
+	case errors.Is(err, repository.ErrQuotaBelowFilled):
+		return helper.NewError(fiber.StatusConflict, "QUOTA_BELOW_ENROLLED",
+			"kuota tidak boleh lebih kecil dari jumlah peserta saat ini")
 	default:
 		return helper.Internal(err)
 	}

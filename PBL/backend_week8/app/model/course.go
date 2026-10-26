@@ -12,3 +12,16 @@ type Course struct {
 	Version       int       `json:"version"`
 	CreatedAt     time.Time `json:"created_at"`
 }
+
+// SwapRequest dipakai endpoint pindah kelas: keluar dari satu kelas dan
+// masuk ke kelas lain sebagai SATU tindakan yang tidak dapat dipecah.
+type SwapRequest struct {
+	FromCourseID int `json:"from_course_id" validate:"required,min=1"`
+	ToCourseID   int `json:"to_course_id"   validate:"required,min=1"`
+}
+
+// UpdateQuotaRequest membawa version yang terakhir DILIHAT client.
+type UpdateQuotaRequest struct {
+	Quota   int `json:"quota"   validate:"required,min=1,max=500"`
+	Version int `json:"version" validate:"required,min=1"`
+}

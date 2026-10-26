@@ -70,12 +70,19 @@ func Register(app *fiber.App, deps Dependencies) {
 		middleware.RequireJSON,
 		middleware.RequireAuth(deps.JWT))
 
-	// "/mine" didaftarkan SEBELUM "/:id"
+	// "/mine" didaftarkan SEBELUM "/:id".
 	courses.Get("/", deps.CourseService.List)
 	courses.Get("/mine", deps.CourseService.Mine)
 	courses.Get("/:id", deps.CourseService.Get)
 	courses.Post("/:id/enroll", deps.CourseService.Enroll)
 	courses.Delete("/:id/enroll", deps.CourseService.Drop)
+	courses.Patch("/:id", middleware.RequirePermission(deps.Permissions, "course:manage"),
+		deps.CourseService.UpdateQuota)
+
+	enrollments := api.Group("/enrollments",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT))
+	enrollments.Post("/swap", deps.CourseService.Swap)
 }
 
 // healthCheck dipisah menjadi fungsi closure agar fungsi Register lebih bersih.
