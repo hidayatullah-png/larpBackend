@@ -5,16 +5,20 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"latihan-fiber/app/model"
 	"latihan-fiber/app/repository"
 	"latihan-fiber/helper"
 )
 
+var errCreditLimit = errors.New("batas SKS terlampaui")
+
 type CourseService struct {
 	courses repository.CourseRepository
+	tx      *repository.TxManager
 }
 
-func NewCourseService(courses repository.CourseRepository) *CourseService {
-	return &CourseService{courses: courses}
+func NewCourseService(courses repository.CourseRepository, tx *repository.TxManager) *CourseService {
+	return &CourseService{courses: courses, tx: tx}
 }
 
 // GET /courses
@@ -52,6 +56,7 @@ func (s *CourseService) Mine(c *fiber.Ctx) error {
 	return helper.Success(c, fiber.StatusOK, "KRS berhasil diambil", fiber.Map{
 		"courses":       courses,
 		"total_credits": total,
+		"max_credits":   MaxCreditsPerSemester,
 	})
 }
 
@@ -72,22 +77,7 @@ func (s *CourseService) Get(c *fiber.Ctx) error {
 	return helper.Success(c, fiber.StatusOK, "kelas ditemukan", course)
 }
 
-func translateCourseError(err error) error {
-	switch {
-	case errors.Is(err, repository.ErrNotFound):
-		return helper.NotFound("kelas tidak ditemukan")
-	case errors.Is(err, repository.ErrCourseFull):
-		return helper.NewError(fiber.StatusConflict, "COURSE_FULL", "kuota kelas sudah penuh")
-	case errors.Is(err, repository.ErrDuplicate):
-		return helper.NewError(fiber.StatusConflict, "ALREADY_ENROLLED", "Anda sudah terdaftar di kelas ini")
-	default:
-		return helper.Internal(err)
-	}
-}
-
 // POST /courses/:id/enroll
-// VERSI NAIF - SENGAJA SALAH. Hanya untuk disaksikan masalahnya, lalu
-// diganti seluruhnya pada Langkah 6.
 func (s *CourseService) Enroll(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -102,26 +92,93 @@ func (s *CourseService) Enroll(c *fiber.Ctx) error {
 		return helper.BadRequest("id harus berupa angka positif")
 	}
 
-	// 1. Baca
-	course, err := s.courses.FindByID(ctx, courseID)
+	var enrolled model.Course
+	err := s.tx.WithTx(ctx, func(tx repository.DBTX) error {
+		repo := s.courses.WithTx(tx)
+
+		// 1. Kunci KRS milik mahasiswa ini.
+		if err := repo.LockStudent(ctx, current.UserID); err != nil {
+			return err
+		}
+
+		// 2. Periksa batas SKS.
+		course, err := repo.FindByID(ctx, courseID)
+		if err != nil {
+			return err
+		}
+		taken, err := repo.SumCredits(ctx, current.UserID)
+		if err != nil {
+			return err
+		}
+		if !WithinCreditLimit(taken, course.Credits) {
+			return errCreditLimit
+		}
+
+		// 3. Ambil satu kursi secara atomik.
+		enrolled, err = repo.IncrementEnrolled(ctx, courseID)
+		if err != nil {
+			return err
+		}
+
+		// 4. Catat pendaftarannya.
+		return repo.InsertEnrollment(ctx, courseID, current.UserID)
+	})
 	if err != nil {
 		return translateCourseError(err)
 	}
 
-	// 2. Periksa
-	if course.EnrolledCount >= course.Quota {
-		return translateCourseError(repository.ErrCourseFull)
-	}
-
-	// 3. Tulis
-	if err := s.courses.InsertEnrollment(ctx, courseID, current.UserID); err != nil {
-		return translateCourseError(err)
-	}
-	if err := s.courses.SetEnrolledCount(ctx, courseID, course.EnrolledCount+1); err != nil {
-		return translateCourseError(err)
-	}
-
-	course.EnrolledCount++
-	return helper.Created(c, "berhasil mendaftar kelas", course,
+	return helper.Created(c, "berhasil mendaftar kelas", enrolled,
 		"/api/v1/courses/"+strconv.Itoa(courseID))
+}
+
+// DELETE /courses/:id/enroll
+func (s *CourseService) Drop(c *fiber.Ctx) error {
+	ctx, cancel := helper.RequestContext(c)
+	defer cancel()
+
+	current, ok := helper.CurrentUser(c)
+	if !ok {
+		return helper.Unauthorized("belum terautentikasi")
+	}
+
+	courseID, valid := helper.ParamID(c)
+	if !valid {
+		return helper.BadRequest("id harus berupa angka positif")
+	}
+
+	err := s.tx.WithTx(ctx, func(tx repository.DBTX) error {
+		repo := s.courses.WithTx(tx)
+
+		if err := repo.LockStudent(ctx, current.UserID); err != nil {
+			return err
+		}
+		if err := repo.DeleteEnrollment(ctx, courseID, current.UserID); err != nil {
+			return err
+		}
+		_, err := repo.DecrementEnrolled(ctx, courseID)
+		return err
+	})
+	if err != nil {
+		return translateCourseError(err)
+	}
+
+	return helper.NoContent(c)
+}
+
+func translateCourseError(err error) error {
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		return helper.NotFound("kelas tidak ditemukan")
+	case errors.Is(err, repository.ErrCourseFull):
+		return helper.NewError(fiber.StatusConflict, "COURSE_FULL", "kuota kelas sudah penuh")
+	case errors.Is(err, repository.ErrDuplicate):
+		return helper.NewError(fiber.StatusConflict, "ALREADY_ENROLLED", "Anda sudah terdaftar di kelas ini")
+	case errors.Is(err, repository.ErrNotEnrolled):
+		return helper.NewError(fiber.StatusConflict, "NOT_ENROLLED", "Anda tidak terdaftar di kelas tersebut")
+	case errors.Is(err, errCreditLimit):
+		return helper.NewError(fiber.StatusConflict, "CREDIT_LIMIT_EXCEEDED",
+			"batas "+strconv.Itoa(MaxCreditsPerSemester)+" SKS terlampaui")
+	default:
+		return helper.Internal(err)
+	}
 }

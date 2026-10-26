@@ -75,6 +75,7 @@ func Register(app *fiber.App, deps Dependencies) {
 	courses.Get("/mine", deps.CourseService.Mine)
 	courses.Get("/:id", deps.CourseService.Get)
 	courses.Post("/:id/enroll", deps.CourseService.Enroll)
+	courses.Delete("/:id/enroll", deps.CourseService.Drop)
 }
 
 // healthCheck dipisah menjadi fungsi closure agar fungsi Register lebih bersih.
