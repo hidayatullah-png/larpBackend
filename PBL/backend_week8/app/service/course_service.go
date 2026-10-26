@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"latihan-fiber/app/repository"
@@ -75,7 +76,52 @@ func translateCourseError(err error) error {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		return helper.NotFound("kelas tidak ditemukan")
+	case errors.Is(err, repository.ErrCourseFull):
+		return helper.NewError(fiber.StatusConflict, "COURSE_FULL", "kuota kelas sudah penuh")
+	case errors.Is(err, repository.ErrDuplicate):
+		return helper.NewError(fiber.StatusConflict, "ALREADY_ENROLLED", "Anda sudah terdaftar di kelas ini")
 	default:
 		return helper.Internal(err)
 	}
+}
+
+// POST /courses/:id/enroll
+// VERSI NAIF - SENGAJA SALAH. Hanya untuk disaksikan masalahnya, lalu
+// diganti seluruhnya pada Langkah 6.
+func (s *CourseService) Enroll(c *fiber.Ctx) error {
+	ctx, cancel := helper.RequestContext(c)
+	defer cancel()
+
+	current, ok := helper.CurrentUser(c)
+	if !ok {
+		return helper.Unauthorized("belum terautentikasi")
+	}
+
+	courseID, valid := helper.ParamID(c)
+	if !valid {
+		return helper.BadRequest("id harus berupa angka positif")
+	}
+
+	// 1. Baca
+	course, err := s.courses.FindByID(ctx, courseID)
+	if err != nil {
+		return translateCourseError(err)
+	}
+
+	// 2. Periksa
+	if course.EnrolledCount >= course.Quota {
+		return translateCourseError(repository.ErrCourseFull)
+	}
+
+	// 3. Tulis
+	if err := s.courses.InsertEnrollment(ctx, courseID, current.UserID); err != nil {
+		return translateCourseError(err)
+	}
+	if err := s.courses.SetEnrolledCount(ctx, courseID, course.EnrolledCount+1); err != nil {
+		return translateCourseError(err)
+	}
+
+	course.EnrolledCount++
+	return helper.Created(c, "berhasil mendaftar kelas", course,
+		"/api/v1/courses/"+strconv.Itoa(courseID))
 }

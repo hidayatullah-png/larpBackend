@@ -121,7 +121,7 @@ func loadAccounts(ctx context.Context, pool *pgxpool.Pool, jwtManager *helper.JW
 			return nil, err
 		}
 		// Alat ini mencetak token sendiri karena ia memegang JWT_SECRET.
-		token, err := jwtManager.GenerateAccessToken(u)
+		token, err := jwtManager.GenerateAccess(u)
 		if err != nil {
 			return nil, err
 		}
