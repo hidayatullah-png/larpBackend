@@ -96,6 +96,8 @@ func main() {
 		runCredits(ctx, pool, client, *baseURL, accounts)
 	case "swap":
 		runSwap(ctx, pool, client, *baseURL, accounts)
+	case "supervisor":
+		runSupervisor(ctx, pool, client, *baseURL, accounts)
 	default:
 		fmt.Fprintf(os.Stderr, "mode tidak dikenal: %s (gunakan crowd, credits, atau swap)\n", *mode)
 		os.Exit(1)
@@ -316,4 +318,60 @@ func runSwap(ctx context.Context, pool *pgxpool.Pool, client *http.Client, baseU
 	fmt.Printf("deadlock terdeteksi PostgreSQL selama uji: %d\n", deadlocksAfter-deadlocksBefore)
 	checkCourseConsistency(ctx, pool, "IF101")
 	checkCourseConsistency(ctx, pool, "IF102")
+}
+
+// Mode 4 (Tugas Mandiri D.3): 30 penetapan serentak ke 1 pembimbing berkuota 3
+func runSupervisor(ctx context.Context, pool *pgxpool.Pool, client *http.Client, baseURL string, accounts []testAccount) {
+	var supID int
+	err := pool.QueryRow(ctx, `SELECT id FROM supervisors WHERE nidn = '0005089003'`).Scan(&supID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "dosen pembimbing uji tidak ditemukan: %v\n", err)
+		return
+	}
+
+	// Reset data supervisions sebelum pengujian dimulai
+	_, _ = pool.Exec(ctx, `DELETE FROM supervisions`)
+	_, _ = pool.Exec(ctx, `UPDATE supervisors SET supervised_count = 0`)
+
+	// Ambil 30 ID mahasiswa dari tabel students
+	rows, err := pool.Query(ctx, `SELECT id FROM students ORDER BY id LIMIT 30`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gagal mengambil 30 students: %v\n", err)
+		return
+	}
+	defer rows.Close()
+
+	var studentIDs []int
+	for rows.Next() {
+		var id int
+		_ = rows.Scan(&id)
+		studentIDs = append(studentIDs, id)
+	}
+	if len(studentIDs) < 30 {
+		fmt.Fprintf(os.Stderr, "jumlah baris di tabel students kurang dari 30 (ditemukan %d)\n", len(studentIDs))
+		return
+	}
+
+	fmt.Println("30 mahasiswa berebut dosen pembimbing (kuota 3) secara serentak...")
+	url := fmt.Sprintf("%s/supervisors/%d/assign", baseURL, supID)
+
+	start := time.Now()
+	tally := fire(30, func(i int) string {
+		body := map[string]int{"student_id": studentIDs[i]}
+		return doRequest(client, http.MethodPost, url, accounts[i].Token, body)
+	})
+	elapsed := time.Since(start)
+
+	printTally(tally, elapsed)
+
+	var quota, count, actual int
+	_ = pool.QueryRow(ctx, `SELECT quota, supervised_count FROM supervisors WHERE id = $1`, supID).Scan(&quota, &count)
+	_ = pool.QueryRow(ctx, `SELECT COUNT(*) FROM supervisions WHERE supervisor_id = $1`, supID).Scan(&actual)
+
+	status := "KONSISTEN"
+	if count != actual || count > quota || actual > quota {
+		status = "TIDAK KONSISTEN"
+	}
+	fmt.Printf("Supervisor ID=%d kuota=%d supervised_count=%d baris supervisions=%d -> %s\n",
+		supID, quota, count, actual, status)
 }

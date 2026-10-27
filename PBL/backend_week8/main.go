@@ -47,6 +47,8 @@ func main() {
 	tokenRepository := repository.NewTokenRepository(pool)
 	studentRepository := repository.NewStudentRepository(pool)
 	roleRepository := repository.NewRoleRepository(pool)
+	courseRepository := repository.NewCourseRepository(pool)
+	supervisorRepository := repository.NewSupervisorRepository(pool)
 
 	// 2. Muat pemetaan role dan permission dari database sekali saja
 	rawPermissions, err := roleRepository.LoadPermissions(context.Background())
@@ -59,29 +61,28 @@ func main() {
 	logger.Info("permission dimuat", slog.Any("roles", permissions.KnownRoles()))
 
 	// 3. Inisialisasi Service
-	// Catatan: Jika NewUserService/NewAuthService belum diubah untuk menerima
-	// parameter 'permissions', mungkin perlu menambahkan argument tersebut di file service masing-masing agar tidak error.
 	userService := service.NewUserService(userRepository)
 	authService := service.NewAuthService(
 		userRepository, tokenRepository, jwtManager,
-		permissions, // <- TAMBAHKAN VARIABEL INI DI SINI
+		permissions,
 		time.Duration(config.GetEnvInt("JWT_REFRESH_TTL_DAYS", 7))*24*time.Hour,
 	)
 	studentService := service.NewStudentService(studentRepository, permissions)
 
-	courseRepository := repository.NewCourseRepository(pool)
 	txManager := repository.NewTxManager(pool)
 	courseService := service.NewCourseService(courseRepository, txManager)
+	supervisorService := service.NewSupervisorService(supervisorRepository, txManager)
 
 	// 4. Daftarkan ke Dependencies
 	app := config.NewApp(logger, route.Dependencies{
-		Pool:           pool,
-		JWT:            jwtManager,
-		Permissions:    permissions,
-		UserService:    userService,
-		AuthService:    authService,
-		StudentService: studentService,
-		CourseService:  courseService,
+		Pool:              pool,
+		JWT:               jwtManager,
+		Permissions:       permissions,
+		UserService:       userService,
+		AuthService:       authService,
+		StudentService:    studentService,
+		CourseService:     courseService,
+		SupervisorService: supervisorService,
 	})
 
 	port := config.GetEnv("APP_PORT", "3000")

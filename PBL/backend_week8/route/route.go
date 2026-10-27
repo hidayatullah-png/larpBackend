@@ -20,6 +20,7 @@ type Dependencies struct {
 	AuthService    *service.AuthService
 	StudentService *service.StudentService
 	CourseService  *service.CourseService
+	SupervisorService *service.SupervisorService
 }
 
 // Register memasang seluruh rute API.
@@ -83,6 +84,20 @@ func Register(app *fiber.App, deps Dependencies) {
 		middleware.RequireJSON,
 		middleware.RequireAuth(deps.JWT))
 	enrollments.Post("/swap", deps.CourseService.Swap)
+
+	// Dosen Pembimbing Tugas Akhir (Tugas Mandiri D.2)
+	supervisors := api.Group("/supervisors",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT))
+	supervisors.Get("/", deps.SupervisorService.List)
+	supervisors.Post("/:id/assign", deps.SupervisorService.Assign)
+	supervisors.Patch("/:id", middleware.RequirePermission(deps.Permissions, "supervision:manage"),
+		deps.SupervisorService.UpdateQuota)
+
+	supervisions := api.Group("/supervisions",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT))
+	supervisions.Post("/switch", deps.SupervisorService.Switch)
 }
 
 // healthCheck dipisah menjadi fungsi closure agar fungsi Register lebih bersih.
