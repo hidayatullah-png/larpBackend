@@ -30,12 +30,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Koneksi PostgreSQL
 	pool, err := database.NewPool(context.Background())
 	if err != nil {
 		logger.Error("gagal terhubung ke database", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	// Koneksi MongoDB (Langkah 3)
+	mongoClient, err := database.NewMongoClient(context.Background())
+	if err != nil {
+		logger.Error("gagal terhubung ke MongoDB", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = mongoClient.Disconnect(ctx)
+	}()
+	mongoDB := mongoClient.Database(config.GetEnv("MONGO_DATABASE", "praktikum_backend"))
 
 	jwtManager := helper.NewJWTManager(jwtSecret,
 		config.GetEnv("JWT_ISSUER", "praktikum-backend"),
@@ -50,11 +64,17 @@ func main() {
 	courseRepository := repository.NewCourseRepository(pool)
 	supervisorRepository := repository.NewSupervisorRepository(pool)
 
+	reviewRepository := repository.NewReviewRepository(mongoDB)
+	if err := reviewRepository.EnsureIndexes(context.Background()); err != nil {
+		logger.Error("gagal membuat index MongoDB", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
 	// 2. Muat pemetaan role dan permission dari database sekali saja
 	rawPermissions, err := roleRepository.LoadPermissions(context.Background())
 	if err != nil {
 		logger.Error("gagal memuat permission", slog.String("error", err.Error()))
-		os.Exit(1) // Fail closed: aplikasi menolak menyala jika izin gagal dimuat
+		os.Exit(1)
 	}
 
 	permissions := helper.NewPermissionSet(rawPermissions)
@@ -72,10 +92,12 @@ func main() {
 	txManager := repository.NewTxManager(pool)
 	courseService := service.NewCourseService(courseRepository, txManager)
 	supervisorService := service.NewSupervisorService(supervisorRepository, txManager)
+	reviewService := service.NewReviewService(reviewRepository, courseRepository, permissions)
 
 	// 4. Daftarkan ke Dependencies
 	app := config.NewApp(logger, route.Dependencies{
 		Pool:              pool,
+		Mongo:             mongoClient,
 		JWT:               jwtManager,
 		Permissions:       permissions,
 		UserService:       userService,
@@ -83,6 +105,7 @@ func main() {
 		StudentService:    studentService,
 		CourseService:     courseService,
 		SupervisorService: supervisorService,
+		ReviewService:     reviewService,
 	})
 
 	port := config.GetEnv("APP_PORT", "3000")
