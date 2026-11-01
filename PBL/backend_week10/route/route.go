@@ -98,7 +98,7 @@ func Register(app *fiber.App, deps Dependencies) {
 	supervisions.Post("/switch", deps.SupervisorService.Switch)
 }
 
-// healthCheck kini memeriksa DUA database sesuai Langkah 3.
+// healthCheck kini memeriksa DUA database sesuai
 func healthCheck(pool *pgxpool.Pool, mongoClient *mongo.Client) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
