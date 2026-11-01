@@ -70,6 +70,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	portfolioRepository := repository.NewPortfolioRepository(mongoDB)
+	if err := portfolioRepository.EnsureIndexes(context.Background()); err != nil {
+		logger.Error("gagal membuat index portofolio MongoDB", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
 	// 2. Muat pemetaan role dan permission dari database sekali saja
 	rawPermissions, err := roleRepository.LoadPermissions(context.Background())
 	if err != nil {
@@ -93,6 +99,7 @@ func main() {
 	courseService := service.NewCourseService(courseRepository, txManager)
 	supervisorService := service.NewSupervisorService(supervisorRepository, txManager)
 	reviewService := service.NewReviewService(reviewRepository, courseRepository, permissions)
+	portfolioService := service.NewPortfolioService(portfolioRepository, studentRepository)
 
 	// 4. Daftarkan ke Dependencies
 	app := config.NewApp(logger, route.Dependencies{
@@ -106,6 +113,7 @@ func main() {
 		CourseService:     courseService,
 		SupervisorService: supervisorService,
 		ReviewService:     reviewService,
+		PortfolioService:  portfolioService,
 	})
 
 	port := config.GetEnv("APP_PORT", "3000")

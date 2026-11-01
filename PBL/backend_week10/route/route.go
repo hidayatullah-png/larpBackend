@@ -23,6 +23,7 @@ type Dependencies struct {
 	CourseService     *service.CourseService
 	SupervisorService *service.SupervisorService
 	ReviewService     *service.ReviewService
+	PortfolioService  *service.PortfolioService
 }
 
 // Register memasang seluruh rute API.
@@ -109,6 +110,14 @@ func Register(app *fiber.App, deps Dependencies) {
 	reviews.Delete("/:id", deps.ReviewService.Delete)
 	reviews.Post("/:id/replies", deps.ReviewService.Reply)
 	reviews.Post("/:id/helpful", deps.ReviewService.MarkHelpful)
+
+	// --- Portofolio Mahasiswa (Tugas Mandiri C.2) ---
+	students.Get("/:id/portfolio", deps.PortfolioService.Get)
+	students.Put("/:id/portfolio", middleware.RequireJSON, deps.PortfolioService.Upsert)
+	students.Post("/:id/portfolio/projects", middleware.RequireJSON, deps.PortfolioService.AddProject)
+	students.Delete("/:id/portfolio/projects/:projectId", deps.PortfolioService.RemoveProject)
+	portfolios := api.Group("/portfolios", middleware.RequireAuth(deps.JWT))
+	portfolios.Get("/stats/technologies", deps.PortfolioService.TopTechnologies)
 }
 
 // healthCheck kini memeriksa DUA database sesuai
