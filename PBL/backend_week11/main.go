@@ -1,0 +1,146 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"latihan-fiber/app/repository"
+	"latihan-fiber/app/service"
+	"latihan-fiber/config"
+	"latihan-fiber/database"
+	"latihan-fiber/helper"
+	"latihan-fiber/route"
+)
+
+const minSecretLength = 32
+
+func main() {
+	config.LoadEnv()
+	logger := config.NewLogger()
+
+	// Pengecekan JWT Secret sebelum server menyala
+	jwtSecret := config.GetEnv("JWT_SECRET", "")
+	if len(jwtSecret) < minSecretLength {
+		logger.Error("JWT_SECRET tidak diisi atau terlalu pendek",
+			slog.Int("minimal_karakter", minSecretLength))
+		os.Exit(1)
+	}
+
+	// Koneksi PostgreSQL
+	pool, err := database.NewPool(context.Background())
+	if err != nil {
+		logger.Error("gagal terhubung ke database", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	// Koneksi MongoDB (Langkah 3)
+	mongoClient, err := database.NewMongoClient(context.Background())
+	if err != nil {
+		logger.Error("gagal terhubung ke MongoDB", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = mongoClient.Disconnect(ctx)
+	}()
+	mongoDB := mongoClient.Database(config.GetEnv("MONGO_DATABASE", "praktikum_backend"))
+
+	jwtManager := helper.NewJWTManager(jwtSecret,
+		config.GetEnv("JWT_ISSUER", "praktikum-backend"),
+		time.Duration(config.GetEnvInt("JWT_ACCESS_TTL_MINUTES", 15))*time.Minute,
+	)
+
+	// 1. Inisialisasi Repository
+	userRepository := repository.NewUserRepository(pool)
+	tokenRepository := repository.NewTokenRepository(pool)
+	studentRepository := repository.NewStudentRepository(pool)
+	roleRepository := repository.NewRoleRepository(pool)
+	courseRepository := repository.NewCourseRepository(pool)
+	supervisorRepository := repository.NewSupervisorRepository(pool)
+
+	reviewRepository := repository.NewReviewRepository(mongoDB)
+	if err := reviewRepository.EnsureIndexes(context.Background()); err != nil {
+		logger.Error("gagal membuat index MongoDB", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	portfolioRepository := repository.NewPortfolioRepository(mongoDB)
+	if err := portfolioRepository.EnsureIndexes(context.Background()); err != nil {
+		logger.Error("gagal membuat index portofolio MongoDB", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	// 2. Muat pemetaan role dan permission dari database sekali saja
+	rawPermissions, err := roleRepository.LoadPermissions(context.Background())
+	if err != nil {
+		logger.Error("gagal memuat permission", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	permissions := helper.NewPermissionSet(rawPermissions)
+	logger.Info("permission dimuat", slog.Any("roles", permissions.KnownRoles()))
+
+	// 3. Inisialisasi Service
+	userService := service.NewUserService(userRepository)
+	authService := service.NewAuthService(
+		userRepository, tokenRepository, jwtManager,
+		permissions,
+		time.Duration(config.GetEnvInt("JWT_REFRESH_TTL_DAYS", 7))*24*time.Hour,
+	)
+	studentService := service.NewStudentService(studentRepository, permissions)
+
+	txManager := repository.NewTxManager(pool)
+	courseService := service.NewCourseService(courseRepository, txManager)
+	supervisorService := service.NewSupervisorService(supervisorRepository, txManager)
+	reviewService := service.NewReviewService(reviewRepository, courseRepository, permissions)
+	portfolioService := service.NewPortfolioService(portfolioRepository, studentRepository)
+
+	// 4. Daftarkan ke Dependencies
+	app := config.NewApp(logger, route.Dependencies{
+		Pool:              pool,
+		Mongo:             mongoClient,
+		JWT:               jwtManager,
+		Permissions:       permissions,
+		UserService:       userService,
+		AuthService:       authService,
+		StudentService:    studentService,
+		CourseService:     courseService,
+		SupervisorService: supervisorService,
+		ReviewService:     reviewService,
+		PortfolioService:  portfolioService,
+	})
+
+	port := config.GetEnv("APP_PORT", "3000")
+
+	// Jalankan server di dalam goroutine
+	go func() {
+		if err := app.Listen(":" + port); err != nil {
+			logger.Error("gagal menjalankan server", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+	}()
+
+	logger.Info("server berjalan", slog.String("port", port))
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("memulai proses mematikan server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := app.ShutdownWithContext(ctx); err != nil {
+		logger.Error("gagal mematikan server", slog.String("error", err.Error()))
+	}
+
+	logger.Info("server berhasil dimatikan dengan aman")
+}
