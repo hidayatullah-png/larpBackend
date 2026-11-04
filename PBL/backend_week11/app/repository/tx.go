@@ -62,3 +62,7 @@ func isRetryable(err error) bool {
 	code := pgErrorCode(err)
 	return code == codeSerializationFailure || code == codeDeadlockDetected
 }
+
+func (m *TxManager) WithTxOnce(ctx context.Context, fn func(tx DBTX) error) error {
+	return m.runOnce(ctx, fn)
+}
