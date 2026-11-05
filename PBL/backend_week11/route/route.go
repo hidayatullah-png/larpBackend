@@ -13,17 +13,18 @@ import (
 )
 
 type Dependencies struct {
-	Pool              *pgxpool.Pool
-	Mongo             *mongo.Client
-	JWT               *helper.JWTManager
-	Permissions       *helper.PermissionSet
-	UserService       *service.UserService
-	AuthService       *service.AuthService
-	StudentService    *service.StudentService
-	CourseService     *service.CourseService
-	SupervisorService *service.SupervisorService
-	ReviewService     *service.ReviewService
-	PortfolioService  *service.PortfolioService
+	Pool                *pgxpool.Pool
+	Mongo               *mongo.Client
+	JWT                 *helper.JWTManager
+	Permissions         *helper.PermissionSet
+	UserService         *service.UserService
+	AuthService         *service.AuthService
+	StudentService      *service.StudentService
+	CourseService       *service.CourseService
+	SupervisorService   *service.SupervisorService
+	ReviewService       *service.ReviewService
+	PortfolioService    *service.PortfolioService
+	NotificationService *service.NotificationService
 }
 
 // Register memasang seluruh rute API.
@@ -118,6 +119,17 @@ func Register(app *fiber.App, deps Dependencies) {
 	students.Delete("/:id/portfolio/projects/:projectId", deps.PortfolioService.RemoveProject)
 	portfolios := api.Group("/portfolios", middleware.RequireAuth(deps.JWT))
 	portfolios.Get("/stats/technologies", deps.PortfolioService.TopTechnologies)
+
+	// --- notifikasi (diisi oleh worker, dibaca lewat API)
+	notifications := api.Group("/notifications",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT))
+	notifications.Get("/mine", deps.NotificationService.Mine)
+
+	admin := api.Group("/admin",
+		middleware.RequireJSON,
+		middleware.RequireAuth(deps.JWT))
+	admin.Get("/queue", middleware.RequirePermission(deps.Permissions, "queue:monitor"), deps.NotificationService.Monitor)
 }
 
 // healthCheck kini memeriksa DUA database sesuai
