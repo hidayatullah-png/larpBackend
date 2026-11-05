@@ -14,11 +14,16 @@ var errCreditLimit = errors.New("batas SKS terlampaui")
 
 type CourseService struct {
 	courses repository.CourseRepository
+	outbox  repository.OutboxRepository
 	tx      *repository.TxManager
 }
 
-func NewCourseService(courses repository.CourseRepository, tx *repository.TxManager) *CourseService {
-	return &CourseService{courses: courses, tx: tx}
+func NewCourseService(
+	courses repository.CourseRepository,
+	outbox repository.OutboxRepository,
+	tx *repository.TxManager,
+) *CourseService {
+	return &CourseService{courses: courses, outbox: outbox, tx: tx}
 }
 
 // GET /courses
@@ -114,14 +119,24 @@ func (s *CourseService) Enroll(c *fiber.Ctx) error {
 			return errCreditLimit
 		}
 
-		// 3. Ambil satu kursi secara atomik.
-		enrolled, err = repo.IncrementEnrolled(ctx, courseID)
+		// 3. Ambil satu kursi secara atomik (MENGGUNAKAN tx)
+		enrolled, err := s.courses.WithTx(tx).IncrementEnrolled(ctx, courseID)
 		if err != nil {
 			return err
 		}
 
-		// 4. Catat pendaftarannya.
-		return repo.InsertEnrollment(ctx, courseID, current.UserID)
+		// 4. Catat event-nya ke outbox (MENGGUNAKAN tx)
+		if err := s.outbox.WithTx(tx).Insert(ctx, model.EventEnrollmentCreated, model.EnrollmentEvent{
+			UserID:     current.UserID,
+			CourseID:   enrolled.ID,
+			CourseCode: enrolled.Code,
+			CourseName: enrolled.Name,
+		}); err != nil {
+			return err
+		}
+
+		// 5. Catat pendaftarannya (MENGGUNAKAN tx)
+		return s.courses.WithTx(tx).InsertEnrollment(ctx, courseID, current.UserID)
 	})
 	if err != nil {
 		return translateCourseError(err)
@@ -155,8 +170,19 @@ func (s *CourseService) Drop(c *fiber.Ctx) error {
 		if err := repo.DeleteEnrollment(ctx, courseID, current.UserID); err != nil {
 			return err
 		}
-		_, err := repo.DecrementEnrolled(ctx, courseID)
-		return err
+
+		course, err := repo.DecrementEnrolled(ctx, courseID)
+		if err != nil {
+			return err
+		}
+
+		// BUG 6 DIPERBAIKI: Memakai EventEnrollmentDropped
+		return s.outbox.WithTx(tx).Insert(ctx, model.EventEnrollmentDropped, model.EnrollmentEvent{
+			UserID:     current.UserID,
+			CourseID:   course.ID,
+			CourseCode: course.Code,
+			CourseName: course.Name,
+		})
 	})
 	if err != nil {
 		return translateCourseError(err)
@@ -205,6 +231,7 @@ func (s *CourseService) Swap(c *fiber.Ctx) error {
 		if err != nil {
 			return err
 		}
+		// Variabel to masih dibutuhkan untuk data kelas tujuan (Credits, Code, Name)
 		to, err := repo.FindByID(ctx, req.ToCourseID)
 		if err != nil {
 			return err
@@ -221,16 +248,30 @@ func (s *CourseService) Swap(c *fiber.Ctx) error {
 		if err := repo.DeleteEnrollment(ctx, req.FromCourseID, current.UserID); err != nil {
 			return err
 		}
-		// PERBAIKAN BUG #8: Wajib memakai repo (di dalam tx), BUKAN s.courses (pool di luar tx)
 		if _, err := repo.DecrementEnrolled(ctx, req.FromCourseID); err != nil {
 			return err
 		}
 
-		joined, err = repo.IncrementEnrolled(ctx, req.ToCourseID)
-		if err != nil {
+		// BUG 4 Modul 9 (Locking) & BUG 2 Modul 11 (Outbox): Perhatikan re-assignment var 'joined'
+		var errInc error
+		joined, errInc = repo.IncrementEnrolled(ctx, req.ToCourseID)
+		if errInc != nil {
+			return errInc
+		}
+
+		if err := repo.InsertEnrollment(ctx, req.ToCourseID, current.UserID); err != nil {
 			return err
 		}
-		return repo.InsertEnrollment(ctx, req.ToCourseID, current.UserID)
+
+		// BUG 2 DIPERBAIKI: Memakai properti dari variabel 'joined' / 'to' dengan benar
+		return s.outbox.WithTx(tx).Insert(ctx, model.EventEnrollmentSwapped, model.EnrollmentEvent{
+			UserID:         current.UserID,
+			CourseID:       joined.ID,
+			CourseCode:     joined.Code,
+			CourseName:     joined.Name,
+			FromCourseCode: from.Code,
+			FromCourseName: from.Name,
+		})
 	})
 	if err != nil {
 		return translateCourseError(err)
