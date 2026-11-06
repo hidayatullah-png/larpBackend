@@ -6,9 +6,10 @@ import (
 )
 
 const (
-	EventEnrollmentCreated = "enrollment.created"
-	EventEnrollmentDropped = "enrollment.dropped"
-	EventEnrollmentSwapped = "enrollment.swapped"
+	EventEnrollmentCreated  = "enrollment.created"
+	EventEnrollmentDropped  = "enrollment.dropped"
+	EventEnrollmentSwapped  = "enrollment.swapped"
+	EventCourseQuotaChanged = "course.quota_changed"
 )
 
 const (
@@ -73,4 +74,12 @@ type QueueInfo struct {
 	Completed      int    `json:"completed"`
 	Processed      int    `json:"processed_today"`
 	Failed         int    `json:"failed_today"`
+}
+
+type QuotaChangedEvent struct {
+	CourseID   int    `json:"course_id"`
+	CourseCode string `json:"course_code"`
+	CourseName string `json:"course_name"`
+	OldQuota   int    `json:"old_quota"`
+	NewQuota   int    `json:"new_quota"`
 }

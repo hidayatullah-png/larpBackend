@@ -30,7 +30,7 @@ func (r *notificationPostgresRepository) Claim(ctx context.Context, n model.Noti
 	err := r.db.QueryRow(ctx, `
 		INSERT INTO notifications (outbox_id, user_id, channel, subject, body) 
 		VALUES ($1, $2, $3, $4, $5) 
-		ON CONFLICT (outbox_id) DO NOTHING 
+		ON CONFLICT (outbox_id, user_id) DO NOTHING 
 		RETURNING id`,
 		n.OutboxID, n.UserID, n.Channel, n.Subject, n.Body).Scan(&id)
 

@@ -285,7 +285,7 @@ func (s *CourseService) UpdateQuota(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
 
-	id, valid := helper.ParamID(c)
+	courseID, valid := helper.ParamID(c)
 	if !valid {
 		return helper.BadRequest("id harus berupa angka positif")
 	}
@@ -298,14 +298,36 @@ func (s *CourseService) UpdateQuota(c *fiber.Ctx) error {
 		return helper.Validation(errs)
 	}
 
-	// Satu pernyataan UPDATE saja, sehingga tidak perlu WithTx
-	updated, err := s.courses.UpdateQuota(ctx, id, req.Quota, req.Version)
+	var updated model.Course
+	err := s.tx.WithTx(ctx, func(tx repository.DBTX) error {
+		repo := s.courses.WithTx(tx)
+
+		before, err := repo.FindByID(ctx, courseID)
+		if err != nil {
+			return err
+		}
+
+		updated, err = repo.UpdateQuota(ctx, courseID, req.Quota, req.Version)
+		if err != nil {
+			return err
+		}
+
+		return s.outbox.WithTx(tx).Insert(ctx, model.EventCourseQuotaChanged, model.QuotaChangedEvent{
+			CourseID:   updated.ID,
+			CourseCode: updated.Code,
+			CourseName: updated.Name,
+			OldQuota:   before.Quota,
+			NewQuota:   updated.Quota,
+		})
+	})
 	if err != nil {
 		return translateCourseError(err)
 	}
-	return helper.Success(c, fiber.StatusOK, "kuota berhasil diubah", updated)
+
+	return helper.Success(c, fiber.StatusOK, "kuota berhasil diperbarui", updated)
 }
 
+// Fungsi untuk menerjemahkan error dari repository ke error yang sesuai untuk API
 func translateCourseError(err error) error {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):

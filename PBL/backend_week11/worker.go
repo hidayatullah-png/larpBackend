@@ -37,6 +37,7 @@ func startWorker(ctx context.Context, logger *slog.Logger, pool *pgxpool.Pool) f
 
 	worker := service.NewNotificationWorker(
 		repository.NewUserRepository(pool),
+		repository.NewCourseRepository(pool),
 		repository.NewNotificationRepository(pool),
 		txManager, mailer, logger,
 	)

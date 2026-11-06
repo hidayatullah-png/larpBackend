@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
 	"latihan-fiber/app/model"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var (
@@ -30,6 +31,7 @@ type CourseRepository interface {
 	LockCourses(ctx context.Context, ids ...int) error
 	UpdateQuota(ctx context.Context, id, quota, version int) (model.Course, error)
 	IsEnrolled(ctx context.Context, courseID, userID int) (bool, error)
+	FindEnrolledUsers(ctx context.Context, courseID int) ([]model.User, error)
 }
 
 const courseColumns = `id, code, name, credits, quota, enrolled_count, version, created_at`
@@ -178,6 +180,7 @@ func (r *coursePostgresRepository) DeleteEnrollment(ctx context.Context, courseI
 	}
 	return nil
 }
+
 // LockCourses mengunci beberapa kelas sekaligus, SELALU dalam urutan id
 // menaik, apa pun urutan argumennya, untuk mencegah deadlock.
 func (r *coursePostgresRepository) LockCourses(ctx context.Context, ids ...int) error {
@@ -234,4 +237,27 @@ func (r *coursePostgresRepository) IsEnrolled(ctx context.Context, courseID, use
 		return false, fmt.Errorf("memeriksa pendaftaran: %w", err)
 	}
 	return exists, nil
+}
+
+func (r *coursePostgresRepository) FindEnrolledUsers(ctx context.Context, courseID int) ([]model.User, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT u.id, u.username, u.email, u.role, u.created_at
+		 FROM enrollments e
+		 JOIN users u ON u.id = e.user_id
+		 WHERE e.course_id = $1
+		 ORDER BY u.id`, courseID)
+	if err != nil {
+		return nil, fmt.Errorf("mengambil peserta kelas: %w", err)
+	}
+	defer rows.Close()
+
+	var users []model.User
+	for rows.Next() {
+		var u model.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("memindai peserta kelas: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
 }
