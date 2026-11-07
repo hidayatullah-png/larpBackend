@@ -12,8 +12,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS students_nim_lower_key ON students (LOWER(nim)
 
 CREATE INDEX IF NOT EXISTS students_name_lower_idx ON students (LOWER(name));
 
-ALTER TABLE students DROP COLUMN mata_kuliah, DROP COLUMN grade;
-
 CREATE TABLE IF NOT EXISTS nilai (
     id_nilai SERIAL PRIMARY KEY,
     id_student INT NOT NULL,
