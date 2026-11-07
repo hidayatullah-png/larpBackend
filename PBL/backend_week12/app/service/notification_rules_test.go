@@ -42,7 +42,9 @@ func TestBuildMessage(t *testing.T) {
 	}
 
 	t.Run("event tidak dikenal", func(t *testing.T) {
-		err := BuildMessage("enrollment.unknown", event, user)
+		// Tambahkan _, di depan err :=
+		_, err := BuildMessage("enrollment.unknown", event, user)
+		
 		if !errors.Is(err, errUnknownEvent) {
 			t.Errorf("error = %v, seharusnya membungkus errUnknownEvent", err)
 		}
