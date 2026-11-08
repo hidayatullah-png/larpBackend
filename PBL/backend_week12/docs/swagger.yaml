@@ -1,0 +1,433 @@
+basePath: /api/v1
+definitions:
+  model.CreateReviewRequest:
+    properties:
+      comment:
+        maxLength: 1000
+        minLength: 10
+        type: string
+      rating:
+        maximum: 5
+        minimum: 1
+        type: integer
+      tags:
+        items:
+          type: string
+        maxItems: 5
+        type: array
+    required:
+    - comment
+    - rating
+    type: object
+  model.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  model.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  model.UpdateQuotaRequest:
+    properties:
+      quota:
+        maximum: 500
+        minimum: 1
+        type: integer
+      version:
+        minimum: 1
+        type: integer
+    required:
+    - quota
+    - version
+    type: object
+host: localhost:3000
+info:
+  contact: {}
+  description: Dokumentasi API untuk aplikasi Latihan Fiber.
+  title: Latihan Fiber API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Memverifikasi kredensial dan mengembalikan pasangan access dan
+        refresh token.
+      parameters:
+      - description: Kredensial login
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Login pengguna
+      tags:
+      - auth
+  /auth/me:
+    get:
+      description: Mengembalikan profil dan daftar izin pengguna yang sedang login.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mendapatkan profil pengguna saat ini
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Membuat akun pengguna baru dengan role user.
+      parameters:
+      - description: Data registrasi
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mendaftarkan akun baru
+      tags:
+      - auth
+  /courses:
+    get:
+      consumes:
+      - application/json
+      description: Mengembalikan daftar kelas yang tersedia.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Dapatkan daftar semua kelas
+      tags:
+      - courses
+  /courses/{id}:
+    get:
+      description: Mengembalikan detail kelas berdasarkan ID.
+      parameters:
+      - description: Course ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mendapatkan detail kelas
+      tags:
+      - courses
+    patch:
+      consumes:
+      - application/json
+      description: Mengubah kuota kelas menggunakan nomor versi untuk mencegah konflik
+        perubahan.
+      parameters:
+      - description: Course ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Data kuota kelas
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateQuotaRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Memperbarui kuota kelas
+      tags:
+      - courses
+  /courses/{id}/enroll:
+    delete:
+      description: Menghapus pendaftaran kelas pengguna yang sedang login.
+      parameters:
+      - description: Course ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Membatalkan pendaftaran kelas
+      tags:
+      - courses
+    post:
+      consumes:
+      - application/json
+      description: Mendaftarkan user yang sedang login ke kelas spesifik.
+      parameters:
+      - description: Course ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mendaftar ke sebuah kelas
+      tags:
+      - courses
+  /courses/{id}/reviews:
+    get:
+      description: Mengembalikan ulasan kelas dengan dukungan filter tag dan pagination
+        cursor.
+      parameters:
+      - description: Course ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Filter tag
+        in: query
+        name: tag
+        type: string
+      - description: Cursor ulasan sebelumnya
+        in: query
+        name: before
+        type: string
+      - description: Jumlah ulasan (1-50, default 10)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mendapatkan ulasan kelas
+      tags:
+      - reviews
+    post:
+      consumes:
+      - application/json
+      description: Membuat ulasan untuk kelas yang diikuti oleh pengguna yang sedang
+        login.
+      parameters:
+      - description: Course ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Data ulasan
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateReviewRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Membuat ulasan kelas
+      tags:
+      - reviews
+  /courses/{id}/reviews/summary:
+    get:
+      description: Mengembalikan jumlah, rata-rata rating, distribusi rating, dan
+        tag teratas.
+      parameters:
+      - description: Course ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mendapatkan ringkasan ulasan kelas
+      tags:
+      - reviews
+swagger: "2.0"

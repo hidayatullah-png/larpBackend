@@ -36,6 +36,16 @@ func NewAuthService(
 	}
 }
 
+// @Summary      Mendaftarkan akun baru
+// @Description  Membuat akun pengguna baru dengan role user.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request  body      model.RegisterRequest  true  "Data registrasi"
+// @Success      201      {object}  map[string]interface{}
+// @Failure      400      {object}  map[string]interface{}
+// @Failure      409      {object}  map[string]interface{}
+// @Router       /auth/register [post]
 func (s *AuthService) Register(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -75,6 +85,17 @@ func (s *AuthService) Register(c *fiber.Ctx) error {
 	return helper.Created(c, "pendaftaran berhasil", created, "/api/v1/users/"+strconv.Itoa(created.ID))
 }
 
+// @Summary      Login pengguna
+// @Description  Memverifikasi kredensial dan mengembalikan pasangan access dan refresh token.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request  body      model.LoginRequest  true  "Kredensial login"
+// @Success      200      {object}  map[string]interface{}
+// @Failure      400      {object}  map[string]interface{}
+// @Failure      401      {object}  map[string]interface{}
+// @Failure      403      {object}  map[string]interface{}
+// @Router       /auth/login [post]
 func (s *AuthService) Login(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -165,6 +186,13 @@ func (s *AuthService) Logout(c *fiber.Ctx) error {
 	return helper.Success(c, fiber.StatusOK, "logout berhasil", nil)
 }
 
+// @Summary      Mendapatkan profil pengguna saat ini
+// @Description  Mengembalikan profil dan daftar izin pengguna yang sedang login.
+// @Tags         auth
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Failure      401  {object}  map[string]interface{}
+// @Router       /auth/me [get]
 func (s *AuthService) Me(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()

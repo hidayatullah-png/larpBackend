@@ -22,6 +22,12 @@ import (
 
 const minSecretLength = 32
 
+// @title           Latihan Fiber API
+// @version         1.0
+// @description     Dokumentasi API untuk aplikasi Latihan Fiber.
+// @host            localhost:3000
+// @BasePath        /api/v1
+
 func main() {
 	config.LoadEnv()
 	logger := config.NewLogger()
@@ -55,13 +61,13 @@ func main() {
 		}
 	}
 
-	var stopWorker func()
-	if runWorker {
-		stopWorker = startWorker(ctx, logger, pool)
-		if stopWorker == nil {
-			os.Exit(1)
-		}
-	}
+	// var stopWorker func()
+	// if runWorker {
+	// 	stopWorker = startWorker(ctx, logger, pool)
+	// 	if stopWorker == nil {
+	// 		os.Exit(1)
+	// 	}
+	// }
 
 	logger.Info("aplikasi berjalan", slog.String("role", *role))
 
@@ -72,10 +78,10 @@ func main() {
 			logger.Error("shutdown HTTP tidak rapi", slog.String("error", err.Error()))
 		}
 	}
-	if stopWorker != nil {
-		stopWorker()
-		logger.Info("aplikasi berhenti dengan rapi")
-	}
+	// if stopWorker != nil {
+	// 	stopWorker()
+	// 	logger.Info("aplikasi berhenti dengan rapi")
+	// }
 }
 
 func startAPI(logger *slog.Logger, pool *pgxpool.Pool) *fiber.App {

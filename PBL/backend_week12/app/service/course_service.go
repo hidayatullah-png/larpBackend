@@ -25,8 +25,14 @@ func NewCourseService(
 ) *CourseService {
 	return &CourseService{courses: courses, outbox: outbox, tx: tx}
 }
-
 // GET /courses
+// @Summary      Dapatkan daftar semua kelas
+// @Description  Mengembalikan daftar kelas yang tersedia.
+// @Tags         courses
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  map[string]interface{}
+// @Router       /courses [get]
 func (s *CourseService) List(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -66,6 +72,15 @@ func (s *CourseService) Mine(c *fiber.Ctx) error {
 }
 
 // GET /courses/:id
+// @Summary      Mendapatkan detail kelas
+// @Description  Mengembalikan detail kelas berdasarkan ID.
+// @Tags         courses
+// @Produce      json
+// @Param        id   path      int  true  "Course ID"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      400  {object}  map[string]interface{}
+// @Failure      404  {object}  map[string]interface{}
+// @Router       /courses/{id} [get]
 func (s *CourseService) Get(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -83,6 +98,17 @@ func (s *CourseService) Get(c *fiber.Ctx) error {
 }
 
 // POST /courses/:id/enroll
+// @Summary      Mendaftar ke sebuah kelas
+// @Description  Mendaftarkan user yang sedang login ke kelas spesifik.
+// @Tags         courses
+// @Accept       json
+// @Produce      json
+// @Param        id   path      int  true  "Course ID"
+// @Success      201  {object}  map[string]interface{}
+// @Failure      401  {object}  map[string]interface{}
+// @Failure      404  {object}  map[string]interface{}
+// @Failure      409  {object}  map[string]interface{}
+// @Router       /courses/{id}/enroll [post]
 func (s *CourseService) Enroll(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -147,6 +173,17 @@ func (s *CourseService) Enroll(c *fiber.Ctx) error {
 }
 
 // DELETE /courses/:id/enroll
+// @Summary      Membatalkan pendaftaran kelas
+// @Description  Menghapus pendaftaran kelas pengguna yang sedang login.
+// @Tags         courses
+// @Produce      json
+// @Param        id   path  int  true  "Course ID"
+// @Success      204
+// @Failure      400  {object}  map[string]interface{}
+// @Failure      401  {object}  map[string]interface{}
+// @Failure      404  {object}  map[string]interface{}
+// @Failure      409  {object}  map[string]interface{}
+// @Router       /courses/{id}/enroll [delete]
 func (s *CourseService) Drop(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -281,6 +318,19 @@ func (s *CourseService) Swap(c *fiber.Ctx) error {
 }
 
 // PATCH /courses/:id
+// @Summary      Memperbarui kuota kelas
+// @Description  Mengubah kuota kelas menggunakan nomor versi untuk mencegah konflik perubahan.
+// @Tags         courses
+// @Accept       json
+// @Produce      json
+// @Param        id       path      int                       true  "Course ID"
+// @Param        request  body      model.UpdateQuotaRequest  true  "Data kuota kelas"
+// @Success      200      {object}  map[string]interface{}
+// @Failure      400      {object}  map[string]interface{}
+// @Failure      403      {object}  map[string]interface{}
+// @Failure      404      {object}  map[string]interface{}
+// @Failure      409      {object}  map[string]interface{}
+// @Router       /courses/{id} [patch]
 func (s *CourseService) UpdateQuota(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()

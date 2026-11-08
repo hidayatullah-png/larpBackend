@@ -26,7 +26,7 @@ const (
 	studentB      = 8
 )
 
-var sharedReviews = newFakeReviewRepo()
+//var sharedReviews = newFakeReviewRepo()
 
 type testEnv struct {
 	app *fiber.App 
@@ -35,7 +35,7 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T) testEnv {
 	t.Helper()
-	reviews := sharedReviews
+	reviews := newFakeReviewRepo()
 	courses := &fakeCourseRepo{
 		courses: map[int]model.Course{
 			courseBackend: {ID: courseBackend, Code: "IF101", Name: "Pemrograman Backend Lanjut"},

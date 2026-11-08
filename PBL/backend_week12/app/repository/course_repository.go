@@ -139,9 +139,9 @@ func (r *coursePostgresRepository) SumCredits(ctx context.Context, userID int) (
 // PERBAIKAN BUG #6: Gunakan "< quota" (bukan "<= quota") agar tidak melanggar CHECK constraint saat penuh
 func (r *coursePostgresRepository) IncrementEnrolled(ctx context.Context, courseID int) (model.Course, error) {
 	c, err := scanCourse(r.db.QueryRow(ctx, `
-		UPDATE courses SET enrolled_count = enrolled_count + 1
-		WHERE id = $1 AND enrolled_count < quota
-		RETURNING `+courseColumns, courseID))
+        UPDATE courses SET enrolled_count = enrolled_count + 1
+        WHERE id = $1 AND enrolled_count < quota
+        RETURNING `+courseColumns, courseID))
 	if err == nil {
 		return c, nil
 	}

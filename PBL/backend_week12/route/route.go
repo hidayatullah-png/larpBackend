@@ -10,6 +10,8 @@ import (
 	"latihan-fiber/app/service"
 	"latihan-fiber/helper"
 	"latihan-fiber/middleware"
+	"github.com/gofiber/swagger"
+	_ "latihan-fiber/docs"
 )
 
 type Dependencies struct {
@@ -29,6 +31,8 @@ type Dependencies struct {
 
 // Register memasang seluruh rute API.
 func Register(app *fiber.App, deps Dependencies) {
+	app.Get("/swagger/*", swagger.HandlerDefault)
+
 	api := app.Group("/api/v1")
 
 	// --- Publik ---

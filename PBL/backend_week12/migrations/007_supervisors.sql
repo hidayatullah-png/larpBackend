@@ -38,11 +38,12 @@ INSERT INTO role_permissions (role_name, permission_name) VALUES
 ON CONFLICT DO NOTHING;
 
 -- Pastikan minimal tersedia 35 data students untuk uji beban D.3
-INSERT INTO students (nim, name, owner_id)
+INSERT INTO students (nim, name, owner_id, mata_kuliah)
 SELECT
     '1999' || LPAD(i::text, 4, '0'),
     'Mahasiswa TA ' || LPAD(i::text, 2, '0'),
-    (SELECT id FROM users ORDER BY id LIMIT 1)
+    (SELECT id FROM users ORDER BY id LIMIT 1),
+    'Skripsi'
 FROM generate_series(1, 35) AS s(i)
 WHERE NOT EXISTS (
     SELECT 1 FROM students WHERE nim = '1999' || LPAD(i::text, 4, '0')

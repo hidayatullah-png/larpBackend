@@ -25,6 +25,19 @@ func NewReviewService(
 }
 
 // POST /courses/:id/reviews
+// @Summary      Membuat ulasan kelas
+// @Description  Membuat ulasan untuk kelas yang diikuti oleh pengguna yang sedang login.
+// @Tags         reviews
+// @Accept       json
+// @Produce      json
+// @Param        id       path      int                         true  "Course ID"
+// @Param        request  body      model.CreateReviewRequest  true  "Data ulasan"
+// @Success      201      {object}  map[string]interface{}
+// @Failure      400      {object}  map[string]interface{}
+// @Failure      403      {object}  map[string]interface{}
+// @Failure      404      {object}  map[string]interface{}
+// @Failure      409      {object}  map[string]interface{}
+// @Router       /courses/{id}/reviews [post]
 func (s *ReviewService) Create(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -79,6 +92,17 @@ func (s *ReviewService) Create(c *fiber.Ctx) error {
 }
 
 // GET /courses/:id/reviews
+// @Summary      Mendapatkan ulasan kelas
+// @Description  Mengembalikan ulasan kelas dengan dukungan filter tag dan pagination cursor.
+// @Tags         reviews
+// @Produce      json
+// @Param        id      path   int     true   "Course ID"
+// @Param        tag     query  string  false  "Filter tag"
+// @Param        before  query  string  false  "Cursor ulasan sebelumnya"
+// @Param        limit   query  int     false  "Jumlah ulasan (1-50, default 10)"
+// @Success      200     {object}  map[string]interface{}
+// @Failure      400     {object}  map[string]interface{}
+// @Router       /courses/{id}/reviews [get]
 func (s *ReviewService) ListByCourse(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
@@ -124,6 +148,15 @@ func (s *ReviewService) ListByCourse(c *fiber.Ctx) error {
 }
 
 // GET /courses/:id/reviews/summary
+// @Summary      Mendapatkan ringkasan ulasan kelas
+// @Description  Mengembalikan jumlah, rata-rata rating, distribusi rating, dan tag teratas.
+// @Tags         reviews
+// @Produce      json
+// @Param        id   path      int  true  "Course ID"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      400  {object}  map[string]interface{}
+// @Failure      404  {object}  map[string]interface{}
+// @Router       /courses/{id}/reviews/summary [get]
 func (s *ReviewService) Summary(c *fiber.Ctx) error {
 	ctx, cancel := helper.RequestContext(c)
 	defer cancel()
